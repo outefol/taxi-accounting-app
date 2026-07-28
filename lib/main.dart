@@ -74,6 +74,11 @@ const _translations = <String, Map<String, String>>{
     'date': '日期',
     'note': '备注',
     'save': '保存',
+    'editRecord': '修改流水',
+    'deleteRecord': '删除流水',
+    'confirmDeleteRecord': '确定删除这条流水吗？',
+    'recordDeleted': '流水已删除',
+    'cancel': '取消',
   },
   'en': {
     'appTitle': 'Taxi Ledger',
@@ -136,6 +141,11 @@ const _translations = <String, Map<String, String>>{
     'date': 'Date',
     'note': 'Note',
     'save': 'Save',
+    'editRecord': 'Edit record',
+    'deleteRecord': 'Delete record',
+    'confirmDeleteRecord': 'Delete this record?',
+    'recordDeleted': 'Record deleted',
+    'cancel': 'Cancel',
   },
   'ja': {
     'appTitle': 'タクシー収支帳',
@@ -198,6 +208,11 @@ const _translations = <String, Map<String, String>>{
     'date': '日付',
     'note': 'メモ',
     'save': '保存',
+    'editRecord': '記録を編集',
+    'deleteRecord': '記録を削除',
+    'confirmDeleteRecord': 'この記録を削除しますか？',
+    'recordDeleted': '記録を削除しました',
+    'cancel': 'キャンセル',
   },
   'es': {
     'appTitle': 'Libro del taxi',
@@ -260,6 +275,11 @@ const _translations = <String, Map<String, String>>{
     'date': 'Fecha',
     'note': 'Nota',
     'save': 'Guardar',
+    'editRecord': 'Editar registro',
+    'deleteRecord': 'Eliminar registro',
+    'confirmDeleteRecord': '¿Eliminar este registro?',
+    'recordDeleted': 'Registro eliminado',
+    'cancel': 'Cancelar',
   },
 };
 
@@ -1069,6 +1089,53 @@ class _HomePageState extends State<HomePage> {
       });
       await _saveRecords();
     }
+  }
+
+  Future<void> _editRecord(TaxiRecord record) async {
+    final updated = await Navigator.of(context).push<TaxiRecord>(
+      MaterialPageRoute(
+        builder: (_) => AddRecordPage(initialRecord: record),
+      ),
+    );
+    if (updated == null) {
+      return;
+    }
+    final index = _records.indexOf(record);
+    if (index < 0) {
+      return;
+    }
+    setState(() => _records[index] = updated);
+    await _saveRecords();
+    _showMessage(tr('editRecord'));
+  }
+
+  Future<void> _deleteRecord(TaxiRecord record) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('deleteRecord')),
+        content: Text(tr('confirmDeleteRecord')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr('cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFF05C4D),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(tr('deleteRecord')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    setState(() => _records.remove(record));
+    await _saveRecords();
+    _showMessage(tr('recordDeleted'));
   }
 
   String _backupJson() {
@@ -1993,54 +2060,77 @@ class _HomePageState extends State<HomePage> {
                           },
                         ),
                         for (final record in entry.value)
-                          Container(
-                            color: Colors.white,
-                            padding: const EdgeInsets.fromLTRB(22, 16, 18, 16),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 7,
-                                  height: 7,
-                                  margin: const EdgeInsets.only(top: 9),
-                                  decoration: const BoxDecoration(
-                                    color: orange,
-                                    shape: BoxShape.circle,
+                          InkWell(
+                            onTap: () => _editRecord(record),
+                            child: Container(
+                              color: Colors.white,
+                              padding: const EdgeInsets.fromLTRB(22, 16, 8, 16),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    margin: const EdgeInsets.only(top: 9),
+                                    decoration: const BoxDecoration(
+                                      color: orange,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        record.note.isEmpty
-                                            ? '出租车收入'
-                                            : record.note,
-                                        style: const TextStyle(fontSize: 19),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        '里程 ${record.distance.toStringAsFixed(1)} km　'
-                                        '支出 ¥${record.totalCost.toStringAsFixed(2)}',
-                                        style: const TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 13,
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          record.note.isEmpty
+                                              ? '出租车收入'
+                                              : record.note,
+                                          style: const TextStyle(fontSize: 19),
                                         ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          '里程 ${record.distance.toStringAsFixed(1)} km　'
+                                          '支出 ¥${record.totalCost.toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            color: Colors.grey,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(
+                                    '+${record.income.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    tooltip: tr('editRecord'),
+                                    onSelected: (action) {
+                                      if (action == 'edit') {
+                                        _editRecord(record);
+                                      } else if (action == 'delete') {
+                                        _deleteRecord(record);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                        value: 'edit',
+                                        child: Text(tr('editRecord')),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'delete',
+                                        child: Text(tr('deleteRecord')),
                                       ),
                                     ],
                                   ),
-                                ),
-                                Text(
-                                  '+${record.income.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    color: orange,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         const Divider(height: 1, indent: 46),
@@ -2472,7 +2562,9 @@ class _RankingRow extends StatelessWidget {
 }
 
 class AddRecordPage extends StatefulWidget {
-  const AddRecordPage({super.key});
+  const AddRecordPage({super.key, this.initialRecord});
+
+  final TaxiRecord? initialRecord;
 
   @override
   State<AddRecordPage> createState() => _AddRecordPageState();
@@ -2486,6 +2578,20 @@ class _AddRecordPageState extends State<AddRecordPage> {
   final _vehicleRentController = TextEditingController();
   final _noteController = TextEditingController();
   DateTime _date = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    final record = widget.initialRecord;
+    if (record != null) {
+      _date = record.date;
+      _incomeController.text = record.income.toStringAsFixed(2);
+      _distanceController.text = record.distance.toStringAsFixed(1);
+      _energyController.text = record.energyCost.toStringAsFixed(2);
+      _vehicleRentController.text = record.vehicleRent.toStringAsFixed(2);
+      _noteController.text = record.note;
+    }
+  }
 
   @override
   void dispose() {
@@ -2532,7 +2638,11 @@ class _AddRecordPageState extends State<AddRecordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr('addRecord'))),
+      appBar: AppBar(
+        title: Text(
+          widget.initialRecord == null ? tr('addRecord') : tr('editRecord'),
+        ),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
