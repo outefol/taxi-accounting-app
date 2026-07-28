@@ -1370,7 +1370,23 @@ class _HomePageState extends State<HomePage> {
     }
 
     final dateColumn = findColumn(['日期', 'date', '交易日期']);
-    final incomeColumn = findColumn(['收入', 'income', '金额', 'amount']);
+    // Many bookkeeping CSVs contain both a text column named “收入/支出”
+    // (the record type) and a numeric column named “金额”. Prefer the
+    // numeric amount column so the text type is not parsed as 0.
+    final incomeColumn = findColumn([
+      '金额',
+      '金额元',
+      '金额(元)',
+      '收入金额',
+      '流水金额',
+      '交易金额',
+      '总金额',
+      '数额',
+      'amount',
+      'income amount',
+      '收入',
+      'income',
+    ]);
     final distanceColumn = findColumn(['里程', 'distance', '公里数', 'km']);
     final energyColumn = findColumn([
       '油费电费',
