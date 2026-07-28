@@ -1292,16 +1292,16 @@ class _HomePageState extends State<HomePage> {
   Future<void> _importData() async {
     try {
       final content = await _fileChannel.invokeMethod<String>('openText', {
-        'mimeType': 'application/json',
+        // 允许在同一个文件选择器里选择 JSON 或 CSV。
+        'mimeType': '*/*',
       });
       if (content == null || content.isEmpty) {
         return;
       }
-      final decoded = jsonDecode(content) as Map<String, dynamic>;
-      final items = decoded['records'] as List<dynamic>;
-      final imported = items
-          .map((item) => TaxiRecord.fromJson(item as Map<String, dynamic>))
-          .toList();
+      final trimmedContent = content.trimLeft().replaceFirst('\uFEFF', '');
+      final imported = trimmedContent.startsWith('{')
+          ? _parseJsonRecords(trimmedContent)
+          : _parseCsvRecords(trimmedContent);
       final existingKeys = _records.map((record) => record.uniqueKey).toSet();
       final newRecords = imported
           .where((record) => !existingKeys.contains(record.uniqueKey))
@@ -1344,6 +1344,130 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {
       _showMessage('导入失败：备份文件内容不完整');
     }
+  }
+
+  List<TaxiRecord> _parseJsonRecords(String content) {
+    final decoded = jsonDecode(content) as Map<String, dynamic>;
+    final items = decoded['records'] as List<dynamic>? ?? const [];
+    return items
+        .map((item) => TaxiRecord.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  List<TaxiRecord> _parseCsvRecords(String content) {
+    final rows = _csvRows(content);
+    if (rows.length < 2) {
+      throw const FormatException('CSV 文件没有数据');
+    }
+
+    final header = rows.first.map((value) => value.trim()).toList();
+    String normalized(String value) => value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s_/-（）()]'), '');
+    int findColumn(List<String> names) {
+      final accepted = names.map(normalized).toSet();
+      return header.indexWhere((value) => accepted.contains(normalized(value)));
+    }
+
+    final dateColumn = findColumn(['日期', 'date', '交易日期']);
+    final incomeColumn = findColumn(['收入', 'income', '金额', 'amount']);
+    final distanceColumn = findColumn(['里程', 'distance', '公里数', 'km']);
+    final energyColumn = findColumn([
+      '油费电费',
+      '油费 / 电费',
+      '油费/电费',
+      'energy',
+      'fuel',
+      'electricity',
+    ]);
+    final rentColumn = findColumn(['车辆租金', 'vehicle rent', 'rent', '租金']);
+    final noteColumn = findColumn(['备注', 'note', '说明', 'description']);
+
+    if (dateColumn < 0 || incomeColumn < 0) {
+      throw const FormatException('CSV 必须包含“日期”和“收入”列');
+    }
+
+    String cell(List<String> row, int column) =>
+        column >= 0 && column < row.length ? row[column].trim() : '';
+    double number(String value) {
+      final cleaned = value
+          .replaceAll(',', '')
+          .replaceAll('¥', '')
+          .replaceAll('￥', '')
+          .trim();
+      return double.tryParse(cleaned) ?? 0;
+    }
+    DateTime? parseDate(String value) {
+      var text = value.trim().replaceAll('/', '-');
+      final chinese = RegExp(r'^(\d{4})年(\d{1,2})月(\d{1,2})日?$').firstMatch(text);
+      if (chinese != null) {
+        text = '${chinese.group(1)}-${chinese.group(2)}-${chinese.group(3)}';
+      }
+      return DateTime.tryParse(text);
+    }
+
+    final records = <TaxiRecord>[];
+    for (final row in rows.skip(1)) {
+      if (row.every((value) => value.trim().isEmpty)) {
+        continue;
+      }
+      final date = parseDate(cell(row, dateColumn));
+      if (date == null) {
+        continue;
+      }
+      records.add(
+        TaxiRecord(
+          date: date,
+          income: number(cell(row, incomeColumn)),
+          distance: number(cell(row, distanceColumn)),
+          energyCost: number(cell(row, energyColumn)),
+          vehicleRent: number(cell(row, rentColumn)),
+          note: cell(row, noteColumn),
+        ),
+      );
+    }
+    if (records.isEmpty) {
+      throw const FormatException('CSV 中没有可识别的流水');
+    }
+    return records;
+  }
+
+  List<List<String>> _csvRows(String content) {
+    final rows = <List<String>>[];
+    final row = <String>[];
+    final field = StringBuffer();
+    var quoted = false;
+    for (var index = 0; index < content.length; index++) {
+      final character = content[index];
+      if (character == '"') {
+        if (quoted && index + 1 < content.length && content[index + 1] == '"') {
+          field.write('"');
+          index++;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (character == ',' && !quoted) {
+        row.add(field.toString());
+        field.clear();
+      } else if ((character == '\n' || character == '\r') && !quoted) {
+        if (character == '\r' && index + 1 < content.length && content[index + 1] == '\n') {
+          index++;
+        }
+        row.add(field.toString());
+        field.clear();
+        if (row.any((value) => value.isNotEmpty)) {
+          rows.add(List<String>.from(row));
+        }
+        row.clear();
+      } else {
+        field.write(character);
+      }
+    }
+    row.add(field.toString());
+    if (row.any((value) => value.isNotEmpty)) {
+      rows.add(row);
+    }
+    return rows;
   }
 
   Future<void> _chooseMonth() async {
