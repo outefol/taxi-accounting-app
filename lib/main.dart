@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _passwordKey = 'login_password';
 const _vehicleNumberKey = 'vehicle_number';
 const _accountKey = 'login_account';
+const _loggedInKey = 'logged_in';
+const _startupPasswordKey = 'startup_password';
 const _languageKey = 'app_language';
 final appLanguage = ValueNotifier<String>('zh');
 final appNavigatorKey = GlobalKey<NavigatorState>();
@@ -36,6 +38,8 @@ const _translations = <String, Map<String, String>>{
     'loginAccount': '登录账号',
     'changePassword': '修改登录密码',
     'security': '安全',
+    'startupPassword': '启动时需要密码',
+    'startupPasswordHint': '下次打开 App 时验证登录密码',
     'lockNow': '立即锁定',
     'backToLogin': '返回登录页面',
     'dataStorage': '数据与存储',
@@ -103,6 +107,8 @@ const _translations = <String, Map<String, String>>{
     'loginAccount': 'Login account',
     'changePassword': 'Change password',
     'security': 'Security',
+    'startupPassword': 'Require password at startup',
+    'startupPasswordHint': 'Verify your password next time the app opens',
     'lockNow': 'Lock now',
     'backToLogin': 'Return to sign-in',
     'dataStorage': 'Data & storage',
@@ -170,6 +176,8 @@ const _translations = <String, Map<String, String>>{
     'loginAccount': 'ログインアカウント',
     'changePassword': 'パスワード変更',
     'security': 'セキュリティ',
+    'startupPassword': '起動時にパスワードを要求',
+    'startupPasswordHint': '次回起動時にパスワードを確認',
     'lockNow': '今すぐロック',
     'backToLogin': 'ログイン画面に戻る',
     'dataStorage': 'データと保存',
@@ -237,6 +245,8 @@ const _translations = <String, Map<String, String>>{
     'loginAccount': 'Cuenta de acceso',
     'changePassword': 'Cambiar contraseña',
     'security': 'Seguridad',
+    'startupPassword': 'Pedir contraseña al iniciar',
+    'startupPasswordHint': 'Verificar la contraseña la próxima vez',
     'lockNow': 'Bloquear ahora',
     'backToLogin': 'Volver al acceso',
     'dataStorage': 'Datos y almacenamiento',
@@ -320,8 +330,40 @@ class TaxiAccountingApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        home: const LoginPage(),
+        home: const AppStartPage(),
       ),
+    );
+  }
+}
+
+class AppStartPage extends StatefulWidget {
+  const AppStartPage({super.key});
+
+  @override
+  State<AppStartPage> createState() => _AppStartPageState();
+}
+
+class _AppStartPageState extends State<AppStartPage> {
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<SharedPreferences>(
+      future: SharedPreferences.getInstance(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final preferences = snapshot.data!;
+        final account = preferences.getString(_accountKey);
+        final vehicleNumber = preferences.getString(_vehicleNumberKey);
+        final loggedIn = preferences.getBool(_loggedInKey) ?? false;
+        final startupPassword = preferences.getBool(_startupPasswordKey) ?? false;
+        if (loggedIn && account != null && vehicleNumber != null && !startupPassword) {
+          return HomePage(account: account, vehicleNumber: vehicleNumber);
+        }
+        return const LoginPage();
+      },
     );
   }
 }
@@ -396,6 +438,7 @@ class _LoginPageState extends State<LoginPage> {
     if (accountMatches && password == savedPassword) {
       await preferences.setString(_accountKey, account);
       await preferences.setString(_vehicleNumberKey, vehicleNumber);
+      await preferences.setBool(_loggedInKey, true);
       if (!mounted) {
         return;
       }
@@ -543,6 +586,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late String _account;
   late String _vehicleNumber;
   late int _recordCount;
+  bool _startupPassword = false;
 
   @override
   void initState() {
@@ -550,6 +594,25 @@ class _SettingsPageState extends State<SettingsPage> {
     _account = widget.account;
     _vehicleNumber = widget.vehicleNumber;
     _recordCount = widget.recordCount;
+    _loadSecuritySettings();
+  }
+
+  Future<void> _loadSecuritySettings() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _startupPassword = preferences.getBool(_startupPasswordKey) ?? false;
+      });
+    }
+  }
+
+  Future<void> _setStartupPassword(bool value) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_startupPasswordKey, value);
+    if (mounted) {
+      setState(() => _startupPassword = value);
+      _message(value ? '已开启启动密码' : '已关闭启动密码');
+    }
   }
 
   void _message(String text) {
@@ -820,7 +883,12 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _lockApp() {
+  Future<void> _lockApp() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_loggedInKey, false);
+    if (!mounted) {
+      return;
+    }
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,
@@ -875,12 +943,24 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 18),
           _SettingsSectionTitle(tr('security')),
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.lock_outline),
-              title: Text(tr('lockNow')),
-              subtitle: Text(tr('backToLogin')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _lockApp,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.password),
+                  title: Text(tr('startupPassword')),
+                  subtitle: Text(tr('startupPasswordHint')),
+                  value: _startupPassword,
+                  onChanged: _setStartupPassword,
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.lock_outline),
+                  title: Text(tr('lockNow')),
+                  subtitle: Text(tr('backToLogin')),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _lockApp,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 18),
@@ -1627,7 +1707,12 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    void lockApp() {
+    Future<void> lockApp() async {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setBool(_loggedInKey, false);
+      if (!mounted) {
+        return;
+      }
       Navigator.of(
         context,
       ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
@@ -1910,7 +1995,17 @@ class _HomePageState extends State<HomePage> {
                                             ),
                                             IconButton(
                                               tooltip: '退出登录',
-                                              onPressed: () {
+                                              onPressed: () async {
+                                                final preferences =
+                                                    await SharedPreferences
+                                                        .getInstance();
+                                                await preferences.setBool(
+                                                  _loggedInKey,
+                                                  false,
+                                                );
+                                                if (!context.mounted) {
+                                                  return;
+                                                }
                                                 Navigator.of(
                                                   context,
                                                 ).pushReplacement(

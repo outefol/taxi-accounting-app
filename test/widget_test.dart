@@ -8,6 +8,7 @@ void main() {
   testWidgets('添加流水后自动计算净收入', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const TaxiAccountingApp());
+    await tester.pumpAndSettle();
 
     expect(find.text('出租车流水记账'), findsOneWidget);
     expect(find.text('登录'), findsOneWidget);
