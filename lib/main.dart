@@ -1390,12 +1390,42 @@ class _HomePageState extends State<HomePage> {
     String cell(List<String> row, int column) =>
         column >= 0 && column < row.length ? row[column].trim() : '';
     double number(String value) {
-      final cleaned = value
-          .replaceAll(',', '')
-          .replaceAll('¥', '')
-          .replaceAll('￥', '')
+      // CSV files exported by Excel/手机记账软件 may contain currency symbols,
+      // Chinese units, non-breaking spaces, full-width digits, or a leading +.
+      // Parsing the whole cell with double.tryParse would turn those values into 0.
+      var cleaned = value
+          .replaceAll('\uFEFF', '')
+          .replaceAll('\u00A0', ' ')
+          .replaceAll('０', '0')
+          .replaceAll('１', '1')
+          .replaceAll('２', '2')
+          .replaceAll('３', '3')
+          .replaceAll('４', '4')
+          .replaceAll('５', '5')
+          .replaceAll('６', '6')
+          .replaceAll('７', '7')
+          .replaceAll('８', '8')
+          .replaceAll('９', '9')
+          .replaceAll('．', '.')
+          .replaceAll('，', ',')
           .trim();
-      return double.tryParse(cleaned) ?? 0;
+      if (cleaned.isEmpty || cleaned == '-' || cleaned == '—') {
+        return 0;
+      }
+
+      final negative = cleaned.contains('(') && cleaned.contains(')');
+      // Keep only the first signed numeric token. This accepts values such as
+      // "¥ 9,530.00元", "+300", and "收入：300.50".
+      final match = RegExp(r'[-+]?\d[\d,\s]*(?:\.\d+)?').firstMatch(cleaned);
+      if (match == null) {
+        return 0;
+      }
+      final numeric = match.group(0)!.replaceAll(RegExp(r'[\s,]'), '');
+      final parsed = double.tryParse(numeric);
+      if (parsed == null || parsed.isNaN || parsed.isInfinite) {
+        return 0;
+      }
+      return negative ? -parsed.abs() : parsed;
     }
     DateTime? parseDate(String value) {
       var text = value.trim().replaceAll('/', '-');
