@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="taxi_accounting_app"
+        android:label="出租车 / 网约车司机专业记账"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

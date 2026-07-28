@@ -10,7 +10,7 @@ void main() {
     await tester.pumpWidget(const TaxiAccountingApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('出租车流水记账'), findsOneWidget);
+    expect(find.text('出租车 / 网约车司机专业记账'), findsOneWidget);
     expect(find.text('登录'), findsOneWidget);
 
     final loginFields = find.byType(TextField);

@@ -16,7 +16,7 @@ final appNavigatorKey = GlobalKey<NavigatorState>();
 
 const _translations = <String, Map<String, String>>{
   'zh': {
-    'appTitle': '出租车流水记账',
+    'appTitle': '出租车 / 网约车司机专业记账',
     'loginSubtitle': '登录后开始记账',
     'phoneEmail': '手机号码或邮箱',
     'vehicle': '车号',
@@ -85,7 +85,7 @@ const _translations = <String, Map<String, String>>{
     'cancel': '取消',
   },
   'en': {
-    'appTitle': 'Taxi Ledger',
+    'appTitle': 'Professional Taxi Driver Ledger',
     'loginSubtitle': 'Sign in to start recording',
     'phoneEmail': 'Phone number or email',
     'vehicle': 'Vehicle number',
@@ -154,7 +154,7 @@ const _translations = <String, Map<String, String>>{
     'cancel': 'Cancel',
   },
   'ja': {
-    'appTitle': 'タクシー収支帳',
+    'appTitle': 'タクシー・配車ドライバー記帳',
     'loginSubtitle': 'ログインして記帳を開始',
     'phoneEmail': '電話番号またはメール',
     'vehicle': '車両番号',
@@ -223,7 +223,7 @@ const _translations = <String, Map<String, String>>{
     'cancel': 'キャンセル',
   },
   'es': {
-    'appTitle': 'Libro del taxi',
+    'appTitle': 'Contabilidad profesional para conductores',
     'loginSubtitle': 'Inicia sesión para registrar',
     'phoneEmail': 'Teléfono o correo',
     'vehicle': 'Número del vehículo',
@@ -872,14 +872,14 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showAbout() {
     showAboutDialog(
       context: context,
-      applicationName: '出租车流水记账',
+      applicationName: '出租车 / 网约车司机专业记账',
       applicationVersion: '1.0.0',
       applicationIcon: const Icon(
         Icons.local_taxi,
         size: 48,
         color: Color(0xFFFFBE4F),
       ),
-      children: const [Text('出租车司机本地流水、里程和费用管理工具。')],
+      children: const [Text('出租车与网约车司机的本地流水、里程和费用管理工具。')],
     );
   }
 
@@ -1845,11 +1845,11 @@ class _HomePageState extends State<HomePage> {
     void showAbout() {
       showAboutDialog(
         context: context,
-        applicationName: '出租车流水记账',
+        applicationName: '出租车 / 网约车司机专业记账',
         applicationVersion: '1.0.0',
         applicationIcon: const Icon(Icons.local_taxi, size: 48, color: yellow),
         children: const [
-          Text('本地单机出租车收入、支出和里程管理工具。'),
+          Text('本地单机出租车与网约车收入、支出和里程管理工具。'),
           SizedBox(height: 8),
           Text('数据只保存在设备本地，不使用 Token 或服务器。'),
         ],
