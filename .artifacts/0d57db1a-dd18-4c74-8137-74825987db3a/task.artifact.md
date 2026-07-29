@@ -1,6 +1,9 @@
-- [ ] 优化 `lib/main.dart` 中的 CSV 解析逻辑
-    - [ ] 改进 `findColumn` 识别逻辑，支持优先级和更广泛的关键字
-    - [ ] 增强 `number` 解析函数，防止误解析日期字符串
-    - [ ] 完善 `_csvRows` 对多分隔符的支持（可选，视逻辑而定）
-- [ ] 验证修复效果
-- [ ] 创建 Walkthrough 演示修改内容
+- [x] 配置依赖与资源
+    - [x] 在 `pubspec.yaml` 中添加 `audioplayers` 依赖
+    - [x] 在 `pubspec.yaml` 中注册 `assets/sounds/` 资源
+- [x] 修改 `lib/main.dart` 逻辑
+    - [x] 修改 `SettingsPage` 的退出逻辑（不注销）
+    - [x] 集成 `AudioPlayer` 并在 `_addRecord` 时播放音效
+- [x] 验证与提示
+    - [x] 运行 `flutter pub get` (已发起，建议手动确认)
+    - [x] 提示用户放置 `cash.mp3` 文件
