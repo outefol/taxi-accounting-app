@@ -927,7 +927,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showAboutDialog(
       context: context,
       applicationName: '出租车 / 网约车司机专业记账',
-      applicationVersion: '1.0.1',
+      applicationVersion: '1.0.2',
       applicationIcon: const Icon(
         Icons.local_taxi,
         size: 48,
@@ -2002,7 +2002,7 @@ class _HomePageState extends State<HomePage> {
       showAboutDialog(
         context: context,
         applicationName: '出租车 / 网约车司机专业记账',
-        applicationVersion: '1.0.1',
+        applicationVersion: '1.0.2',
         applicationIcon: const Icon(Icons.local_taxi, size: 48, color: yellow),
         children: const [
           Text('本地单机出租车与网约车收入、支出和里程管理工具。'),
