@@ -1028,16 +1028,28 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: Text(tr('localOnly')),
                 ),
                 const Divider(height: 1, indent: 56),
-                ListTile(
-                  leading: const Icon(
-                    Icons.delete_outline,
-                    color: Color(0xFFF05C4D),
-                  ),
-                  title: Text(
-                    tr('clearRecords'),
-                    style: const TextStyle(color: Color(0xFFF05C4D)),
-                  ),
-                  onTap: _clearRecords,
+                ExpansionTile(
+                  leading: const Icon(Icons.warning_amber_outlined),
+                  title: const Text('危险操作'),
+                  subtitle: const Text('谨慎操作，展开后才能清空流水'),
+                  children: [
+                    ListTile(
+                      contentPadding: const EdgeInsets.only(
+                        left: 72,
+                        right: 16,
+                      ),
+                      leading: const Icon(
+                        Icons.delete_forever_outlined,
+                        color: Color(0xFFF05C4D),
+                      ),
+                      title: Text(
+                        tr('clearRecords'),
+                        style: const TextStyle(color: Color(0xFFF05C4D)),
+                      ),
+                      subtitle: const Text('需要密码验证，且无法恢复'),
+                      onTap: _clearRecords,
+                    ),
+                  ],
                 ),
               ],
             ),
