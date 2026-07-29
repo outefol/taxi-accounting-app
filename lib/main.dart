@@ -549,19 +549,6 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: () async {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.remove('taxi_records');
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('DEBUG: 本地数据已强制清空')),
-                            );
-                          }
-                        },
-                        child: const Text('DEBUG: 强制清空本地所有记录'),
-                      ),
-                      const SizedBox(height: 12),
                       Text(tr('firstLogin')),
                     ],
                   ),
@@ -854,6 +841,58 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _clearRecords() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted) {
+      return;
+    }
+    final savedPassword = preferences.getString(_passwordKey) ?? '123456';
+    final passwordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final passwordVerified = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('验证密码后清空'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: passwordController,
+            autofocus: true,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: '登录密码',
+              hintText: '请输入登录密码',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) {
+              if (value != savedPassword) {
+                return '密码不正确，无法清空流水';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, true);
+              }
+            },
+            child: const Text('下一步'),
+          ),
+        ],
+      ),
+    );
+    passwordController.dispose();
+    if (passwordVerified != true || !mounted) {
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2515,11 +2554,6 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             const SizedBox(width: 72),
-            _BottomItem(
-              icon: Icons.savings_outlined,
-              label: tr('savings'),
-              onTap: () => _showComingSoon('存钱'),
-            ),
             _BottomItem(
               icon: Icons.person_outline,
               label: tr('mine'),
