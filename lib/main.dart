@@ -1028,28 +1028,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: Text(tr('localOnly')),
                 ),
                 const Divider(height: 1, indent: 56),
-                ExpansionTile(
-                  leading: const Icon(Icons.warning_amber_outlined),
-                  title: const Text('危险操作'),
-                  subtitle: const Text('谨慎操作，展开后才能清空流水'),
-                  children: [
-                    ListTile(
-                      contentPadding: const EdgeInsets.only(
-                        left: 72,
-                        right: 16,
-                      ),
-                      leading: const Icon(
-                        Icons.delete_forever_outlined,
-                        color: Color(0xFFF05C4D),
-                      ),
-                      title: Text(
-                        tr('clearRecords'),
-                        style: const TextStyle(color: Color(0xFFF05C4D)),
-                      ),
-                      subtitle: const Text('需要密码验证，且无法恢复'),
-                      onTap: _clearRecords,
-                    ),
-                  ],
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline,
+                    color: Color(0xFFF05C4D),
+                  ),
+                  title: Text(
+                    tr('clearRecords'),
+                    style: const TextStyle(color: Color(0xFFF05C4D)),
+                  ),
+                  onTap: _clearRecords,
                 ),
               ],
             ),
@@ -1431,212 +1419,259 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<TaxiRecord> _parseCsvRecords(String csvContent) {
-    // 1. 自动转换 CSV 字符串为二维数组（自动处理换行与分隔符）
-    List<List<dynamic>> rows = const CsvToListConverter(
-      shouldParseNumbers: false, // 禁用自动转数字，防止“2026年07月27日”被误截断为数字 2026
-    ).convert(csvContent);
+    if (csvContent.trim().isEmpty) {
+      throw const FormatException('CSV 文件为空');
+    }
 
-    if (rows.length <= 1) return [];
+    final cleaned = csvContent
+        .replaceFirst('\uFEFF', '')
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n');
 
-    // 2. 找到真正的表头行（自动跳过开头的说明文字或空行）
-    int headerRowIndex = -1;
-    List<String> headers = [];
+    // Try the common CSV separators and keep the parse with the widest
+    // meaningful rows. This supports both exports used by the app.
+    const delimiters = [',', ';', '\t'];
+    List<List<dynamic>> rows = const [];
+    var selectedDelimiter = ',';
+    var bestScore = -1;
+    for (final delimiter in delimiters) {
+      final parsed = CsvToListConverter(
+        fieldDelimiter: delimiter,
+        eol: '\n',
+        shouldParseNumbers: false,
+      ).convert(cleaned);
+      if (parsed.isEmpty) {
+        continue;
+      }
+      final score = parsed.take(8).fold<int>(0, (sum, row) => sum + row.length);
+      if (score > bestScore) {
+        bestScore = score;
+        rows = parsed;
+        selectedDelimiter = delimiter;
+      }
+    }
+    debugPrint('CSV delimiter: "$selectedDelimiter"');
+    debugPrint('CSV parsed rows: ${rows.length}');
 
-    for (int i = 0; i < rows.length && i < 10; i++) {
-      List<String> line = rows[i].map((e) => e.toString().trim()).toList();
-      String joined = line.join(' ');
-      // 只要包含“日期”或“时间”或“金额”或“收入”，就认定为表头行
-      if (joined.contains('日') ||
-          joined.contains('时间') ||
-          joined.contains(' Date') ||
-          joined.contains('金额') ||
-          joined.contains('收入')) {
+    if (rows.length < 2) {
+      throw const FormatException('CSV 中没有流水数据');
+    }
+
+    String normalize(Object? value) => value
+        .toString()
+        .replaceAll('\uFEFF', '')
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s_./\\()（）【】\[\]：:，,\-]'), '');
+
+    bool hasHeaderWord(String text) {
+      final normalized = normalize(text);
+      return normalized.contains('日期') ||
+          normalized.contains('时间') ||
+          normalized.contains('金额') ||
+          normalized.contains('收入') ||
+          normalized.contains('收支');
+    }
+
+    var headerRowIndex = 0;
+    for (var i = 0; i < rows.length && i < 10; i++) {
+      if (hasHeaderWord(rows[i].join(' '))) {
         headerRowIndex = i;
-        headers = line;
         break;
       }
     }
 
-    // 如果找不到表头，默认使用第 0 行
-    if (headerRowIndex == -1) {
-      headerRowIndex = 0;
-      headers = rows[0].map((e) => e.toString().trim()).toList();
-    }
-
-    // 3. 智能定位各关键列的索引（模糊匹配各种 APP 的表头命名）
-    int dateIdx = _findColumnIndex(
-      headers,
-      ['日期', '时间', '交易时间', '记账时间', 'date', 'time'],
-    );
-    int typeIdx = _findColumnIndex(headers, ['收支类型', '收/支', '类型', '交易类型', 'type']);
-    int categoryIdx =
-        _findColumnIndex(headers, ['类别', '分类', '子类', '商户', 'category']);
-    int amountIdx = _findColumnIndex(
-      headers,
-      ['金额', '收入', '流水', '交易金额', 'amount', 'income'],
-    );
-    int expenseIdx = _findColumnIndex(headers, ['支出', '扣款', 'expense', 'out']);
-    int distanceIdx =
-        _findColumnIndex(headers, ['里程', '公里', '距离', 'distance', 'km']);
-    int noteIdx = _findColumnIndex(headers, ['备注', '说明', '摘要', 'note', 'remark']);
-
-    if (dateIdx < 0 || (amountIdx < 0 && expenseIdx < 0)) {
-      throw FormatException(
-        '无法在 CSV 中找到“日期”或“金额”列。\n当前表头：${headers.join(", ")}',
-      );
-    }
-
-    List<TaxiRecord> records = [];
-
-    // 4. 开始逐行解析数据
-    for (int i = headerRowIndex + 1; i < rows.length; i++) {
-      var row = rows[i];
-      if (row.isEmpty || row.length <= dateIdx) continue;
-
-      // --- A. 日期解析（精准支持 2026年07月27日 / 2026-07-27 / 2026/07/27 / 微信支付宝格式）---
-      String rawDateStr =
-          dateIdx != -1 && dateIdx < row.length ? row[dateIdx].toString().trim() : '';
-      if (rawDateStr.isEmpty) continue;
-
-      DateTime? parsedDate = _parseAnyDateFormat(rawDateStr);
-      if (parsedDate == null) continue; // 无法解析出有效日期的行跳过
-
-      // --- B. 数值与类型解析 ---
-      String typeStr =
-          typeIdx != -1 && typeIdx < row.length ? row[typeIdx].toString().trim() : '';
-      String categoryStr =
-          categoryIdx != -1 && categoryIdx < row.length
-              ? row[categoryIdx].toString().trim()
-              : '';
-      String noteStr =
-          noteIdx != -1 && noteIdx < row.length ? row[noteIdx].toString().trim() : '';
-
-      double mainAmount =
-          amountIdx != -1 && amountIdx < row.length ? _cleanToDouble(row[amountIdx]) : 0.0;
-      double explicitExpense =
-          expenseIdx != -1 && expenseIdx < row.length
-              ? _cleanToDouble(row[expenseIdx])
-              : 0.0;
-      double distance =
-          distanceIdx != -1 && distanceIdx < row.length
-              ? _cleanToDouble(row[distanceIdx])
-              : 0.0;
-
-      // 防错保护：如果数值刚好等于年份数字（如 2024~2030），且不是来自明确的金额列，防止误抓
-      if (mainAmount >= 2024 && mainAmount <= 2030 && typeIdx == -1) {
-        mainAmount = 0.0;
-      }
-
-      double income = 0.0;
-      double energyCost = 0.0;
-      double vehicleRent = 0.0;
-
-      // --- C. 智能归类逻辑 ---
-      // 1) 存在独立“支出”列
-      if (explicitExpense > 0) {
-        if (categoryStr.contains('租') || noteStr.contains('车租')) {
-          vehicleRent = explicitExpense;
-        } else {
-          energyCost = explicitExpense;
-        }
-      }
-
-      // 2) 判断主金额列（单金额列 + 收支类型列 模式，如懒猫记账、支付宝等）
-      if (mainAmount > 0) {
-        if (typeStr.contains('支') || typeStr.contains('出') || typeStr.contains('支出')) {
-          if (categoryStr.contains('租') || noteStr.contains('车租')) {
-            vehicleRent = mainAmount;
-          } else {
-            energyCost = mainAmount;
+    final headers = rows[headerRowIndex].map(normalize).toList();
+    int findColumn(List<String> aliases) {
+      final normalizedAliases = aliases.map(normalize).toList();
+      for (final alias in normalizedAliases) {
+        for (var i = 0; i < headers.length; i++) {
+          if (headers[i] == alias ||
+              (alias.length > 1 && headers[i].contains(alias))) {
+            return i;
           }
-        } else {
-          // 默认或者显式为“收入”
-          income = mainAmount;
         }
       }
+      return -1;
+    }
 
-      // 组合备注
-      String finalNote = '';
-      if (categoryStr.isNotEmpty && noteStr.isNotEmpty) {
-        finalNote = '$categoryStr: $noteStr';
-      } else {
-        finalNote = categoryStr.isNotEmpty ? categoryStr : noteStr;
+    final dateColumn = findColumn(['日期', '交易日期', '记账日期', '时间', '交易时间', 'date']);
+    final typeColumn = findColumn([
+      '收支类型',
+      '收支',
+      '收/支',
+      '交易类型',
+      '类型',
+      'type',
+      'inout',
+    ]);
+    final categoryColumn = findColumn(['类别', '分类', '子类', 'category']);
+    final amountColumn = findColumn([
+      '金额',
+      '金额元',
+      '收入金额',
+      '流水金额',
+      '交易金额',
+      '收入',
+      '流水',
+      'amount',
+      'money',
+      'income',
+    ]);
+    final expenseColumn = findColumn([
+      '支出金额',
+      '支出',
+      '扣款',
+      'expense',
+      'outflow',
+    ]);
+    final distanceColumn = findColumn([
+      '里程',
+      '公里数',
+      '公里',
+      '距离',
+      'distance',
+      'km',
+    ]);
+    final energyColumn = findColumn([
+      '油费电费',
+      '油费',
+      '电费',
+      'energy',
+      'fuel',
+      'electricity',
+    ]);
+    final rentColumn = findColumn(['车辆租金', '车租', '租金', 'rent']);
+    final noteColumn = findColumn([
+      '备注',
+      '说明',
+      '摘要',
+      'note',
+      'remark',
+      'description',
+    ]);
+
+    if (dateColumn < 0 || (amountColumn < 0 && expenseColumn < 0)) {
+      throw FormatException('无法在 CSV 中找到日期或金额列：${headers.join(', ')}');
+    }
+
+    String cell(List<dynamic> row, int index) {
+      if (index < 0 || index >= row.length) {
+        return '';
       }
+      return row[index].toString().trim();
+    }
+
+    double? parseNumber(String value) {
+      var text = value
+          .replaceAll('\u00A0', ' ')
+          .replaceAll('￥', '')
+          .replaceAll('¥', '')
+          .replaceAll('，', ',')
+          .replaceAll('．', '.')
+          .trim();
+      if (text.isEmpty || text == '-' || text == '—') {
+        return null;
+      }
+      final match = RegExp(r'[-+]?\d[\d,\s]*(?:\.\d+)?').firstMatch(text);
+      if (match == null) {
+        return null;
+      }
+      final number = double.tryParse(
+        match.group(0)!.replaceAll(RegExp(r'[\s,]'), ''),
+      );
+      if (number == null || number.isNaN || number.isInfinite) {
+        return null;
+      }
+      return text.contains('(') && text.contains(')') ? -number.abs() : number;
+    }
+
+    DateTime? parseDate(String value) {
+      final match = RegExp(
+        r'(\d{4})\s*(?:年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?|[-/.](\d{1,2})[-/.](\d{1,2}))',
+      ).firstMatch(value.trim());
+      if (match == null) {
+        return null;
+      }
+      final year = int.parse(match.group(1)!);
+      final month = int.parse(match.group(2) ?? match.group(4)!);
+      final day = int.parse(match.group(3) ?? match.group(5)!);
+      final date = DateTime(year, month, day);
+      return date.year == year && date.month == month && date.day == day
+          ? date
+          : null;
+    }
+
+    final records = <TaxiRecord>[];
+    for (final row in rows.skip(headerRowIndex + 1)) {
+      if (row.every((value) => value.toString().trim().isEmpty)) {
+        continue;
+      }
+
+      final date = parseDate(cell(row, dateColumn));
+      if (date == null) {
+        continue;
+      }
+
+      final type = cell(row, typeColumn).toLowerCase();
+      final category = cell(row, categoryColumn);
+      final note = cell(row, noteColumn);
+      final description = '$category $note'.toLowerCase();
+      final isExpense =
+          type.contains('支出') ||
+          type.contains('expense') ||
+          type.contains('outflow') ||
+          type.contains('debit');
+
+      final rawAmount = parseNumber(cell(row, amountColumn));
+      final rawExpense = parseNumber(cell(row, expenseColumn));
+      final incomeAmount = rawAmount == null ? null : rawAmount.abs();
+      var income = 0.0;
+      var energyCost = parseNumber(cell(row, energyColumn))?.abs() ?? 0.0;
+      var vehicleRent = parseNumber(cell(row, rentColumn))?.abs() ?? 0.0;
+
+      // The taxi export has dedicated expense columns. The 懒猫 export has
+      // one amount column plus 收支类型/类别, so classify that amount here.
+      if (isExpense) {
+        final expenseAmount = (rawAmount ?? rawExpense)?.abs() ?? 0.0;
+        if (description.contains('租')) {
+          vehicleRent = vehicleRent == 0 ? expenseAmount : vehicleRent;
+        } else if (energyCost == 0) {
+          energyCost = expenseAmount;
+        }
+      } else if (incomeAmount != null) {
+        income = incomeAmount;
+      }
+
+      // If a file only has a separate 支出 column, retain it as a cost.
+      if (rawAmount == null && rawExpense != null && !isExpense) {
+        energyCost = rawExpense.abs();
+      }
+
+      final distance = parseNumber(cell(row, distanceColumn))?.abs() ?? 0.0;
+      final finalNote = category.isNotEmpty && note.isNotEmpty
+          ? '$category: $note'
+          : category.isNotEmpty
+          ? category
+          : note;
 
       records.add(
         TaxiRecord(
-          date: parsedDate,
+          date: date,
           income: income,
           distance: distance,
           energyCost: energyCost,
           vehicleRent: vehicleRent,
-          note: finalNote.replaceAll('null', '').trim(),
+          note: finalNote,
         ),
       );
     }
 
+    debugPrint('CSV parsed records: ${records.length}');
     if (records.isEmpty) {
       throw const FormatException('未识别到有效的流水记录');
     }
     return records;
   }
-
-  /// 辅助函数 1：根据多种关键词智能寻找匹配的表头索引
-  int _findColumnIndex(List<String> headers, List<String> keywords) {
-    for (int i = 0; i < headers.length; i++) {
-      String header = headers[i].toLowerCase();
-      for (String kw in keywords) {
-        if (header.contains(kw.toLowerCase())) {
-          return i;
-        }
-      }
-    }
-    return -1;
-  }
-
-  /// 辅助函数 2：把任意文本安全的清洗转换为 double，绝对不会报错
-  double _cleanToDouble(dynamic val) {
-    if (val == null) return 0.0;
-    String str = val.toString().trim();
-    if (str.isEmpty || str == 'null') return 0.0;
-
-    // 移除货币符号、逗号、单位等
-    String clean = str.replaceAll(RegExp(r'[^\d.]'), '');
-    return double.tryParse(clean) ?? 0.0;
-  }
-
-  /// 辅助函数 3：全格式通用日期解析器
-  DateTime? _parseAnyDateFormat(String input) {
-    try {
-      // 1. 处理中文日期: "2026年07月27日" -> "2026-07-27"
-      String normalized = input
-          .replaceAll('年', '-')
-          .replaceAll('月', '-')
-          .replaceAll('日', '')
-          .replaceAll('/', '-')
-          .replaceAll('.', '-');
-
-      // 2. 如果包含空格/时间（如 "2026-07-27 14:30:00"），提取前半部分日期
-      if (normalized.contains(' ')) {
-        normalized = normalized.split(' ')[0];
-      }
-
-      // 3. 尝试使用标准的 DateTime.parse
-      return DateTime.parse(normalized);
-    } catch (e) {
-      // 尝试正则匹配 4位年-2位月-2位日
-      RegExp exp = RegExp(r'(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})');
-      Match? match = exp.firstMatch(input);
-      if (match != null) {
-        int year = int.parse(match.group(1)!);
-        int month = int.parse(match.group(2)!);
-        int day = int.parse(match.group(3)!);
-        return DateTime(year, month, day);
-      }
-    }
-    return null;
-  }
-
 
   Future<void> _chooseMonth() async {
     final selected = await showDatePicker(
@@ -2289,8 +2324,7 @@ class _HomePageState extends State<HomePage> {
                                               tooltip: '退出登录',
                                               onPressed: () async {
                                                 final preferences =
-                                                    await SharedPreferences
-                                                        .getInstance();
+                                                    await SharedPreferences.getInstance();
                                                 await preferences.setBool(
                                                   _loggedInKey,
                                                   false,

@@ -72,13 +72,6 @@ void main() {
     expect(find.text('13800138000'), findsOneWidget);
     expect(find.text('修改登录密码'), findsOneWidget);
     expect(find.text('立即锁定'), findsOneWidget);
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('危险操作'));
-    expect(find.text('危险操作'), findsOneWidget);
-    expect(find.text('清空全部流水'), findsNothing);
-    await tester.tap(find.byType(ExpansionTile));
-    await tester.pumpAndSettle();
     expect(find.text('清空全部流水'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();

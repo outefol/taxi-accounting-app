@@ -1,3 +1,6 @@
+import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.dsl.LibraryExtension
+
 allprojects {
     repositories {
         google()
@@ -15,6 +18,24 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+// Keep every Android module (including Flutter plugins such as file_picker)
+// on the same SDK level. Register this before evaluationDependsOn can trigger
+// project evaluation, then apply it after each plugin's own android block.
+subprojects {
+    afterEvaluate {
+        plugins.withId("com.android.application") {
+            extensions.configure<ApplicationExtension> {
+                compileSdk = 36
+            }
+        }
+        plugins.withId("com.android.library") {
+            extensions.configure<LibraryExtension> {
+                compileSdk = 36
+            }
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }

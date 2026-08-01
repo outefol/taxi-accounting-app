@@ -6,7 +6,9 @@ plugins {
 
 android {
     namespace = "com.outefol.taxi_accounting_app"
-    compileSdk = flutter.compileSdkVersion
+    // Keep the app module explicit so it does not depend on a different
+    // Flutter SDK being selected by Android Studio or CI.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -20,7 +22,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
