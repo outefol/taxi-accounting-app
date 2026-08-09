@@ -13,6 +13,10 @@ const _accountKey = 'login_account';
 const _loggedInKey = 'logged_in';
 const _startupPasswordKey = 'startup_password';
 const _languageKey = 'app_language';
+const _vehiclesKey = 'vehicles_v2';
+const _activeVehicleIdKey = 'active_vehicle_id';
+const _legacyVehicleId = 'vehicle_1';
+const _vehicleRecordsPrefix = 'taxi_records_vehicle_';
 final appLanguage = ValueNotifier<String>('zh');
 final appNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -24,8 +28,16 @@ const _translations = <String, Map<String, String>>{
     'vehicle': '车号',
     'vehicleHint': '例如：沪A12345',
     'password': '密码',
+    'setPassword': '设置密码',
+    'setPasswordHint': '首次使用请设置本地密码（至少4位）',
+    'currentPassword': '当前密码',
+    'newPassword': '新密码',
+    'confirmPassword': '确认新密码',
+    'passwordTooShort': '密码至少需要4位',
+    'passwordMismatch': '两次密码不一致',
+    'passwordSaved': '密码已保存',
     'login': '登录',
-    'firstLogin': '首次登录会绑定本机账号　默认密码：123456',
+    'firstLogin': '首次登录会绑定本机账号　首次使用需设置本地密码',
     'invalidAccount': '请输入正确的手机号码或邮箱',
     'enterVehicle': '请输入车号',
     'invalidLogin': '手机号、邮箱或密码不正确',
@@ -37,6 +49,13 @@ const _translations = <String, Map<String, String>>{
     'settings': '设置',
     'basicSettings': '基本设置',
     'accountVehicle': '账号与车辆',
+    'vehicleManagement': '车辆管理',
+    'currentVehicle': '当前车辆',
+    'vehicleList': '车辆列表',
+    'addVehicle': '添加车辆',
+    'deleteVehicle': '删除车辆',
+    'switchVehicle': '切换车辆',
+    'vehicleLimit': '最多添加 100 辆车',
     'loginAccount': '登录账号',
     'changePassword': '修改登录密码',
     'security': '安全',
@@ -93,8 +112,16 @@ const _translations = <String, Map<String, String>>{
     'vehicle': 'Vehicle number',
     'vehicleHint': 'Example: TAXI-001',
     'password': 'Password',
+    'setPassword': 'Set password',
+    'setPasswordHint': 'Set a local password (at least 4 characters)',
+    'currentPassword': 'Current password',
+    'newPassword': 'New password',
+    'confirmPassword': 'Confirm new password',
+    'passwordTooShort': 'Password must be at least 4 characters',
+    'passwordMismatch': 'Passwords do not match',
+    'passwordSaved': 'Password saved',
     'login': 'Sign in',
-    'firstLogin': 'First sign-in binds this device · Default password: 123456',
+    'firstLogin': 'First sign-in binds this device · Set a local password',
     'invalidAccount': 'Enter a valid phone number or email',
     'enterVehicle': 'Enter the vehicle number',
     'invalidLogin': 'Incorrect phone, email, or password',
@@ -106,6 +133,13 @@ const _translations = <String, Map<String, String>>{
     'settings': 'Settings',
     'basicSettings': 'Basic settings',
     'accountVehicle': 'Account & vehicle',
+    'vehicleManagement': 'Vehicle management',
+    'currentVehicle': 'Current vehicle',
+    'vehicleList': 'Vehicle list',
+    'addVehicle': 'Add vehicle',
+    'deleteVehicle': 'Delete vehicle',
+    'switchVehicle': 'Switch vehicle',
+    'vehicleLimit': 'Up to 100 vehicles',
     'loginAccount': 'Login account',
     'changePassword': 'Change password',
     'security': 'Security',
@@ -162,8 +196,16 @@ const _translations = <String, Map<String, String>>{
     'vehicle': '車両番号',
     'vehicleHint': '例：TAXI-001',
     'password': 'パスワード',
+    'setPassword': 'パスワードを設定',
+    'setPasswordHint': '初回使用時にローカルパスワードを設定（4文字以上）',
+    'currentPassword': '現在のパスワード',
+    'newPassword': '新しいパスワード',
+    'confirmPassword': '新しいパスワードを確認',
+    'passwordTooShort': 'パスワードは4文字以上必要です',
+    'passwordMismatch': 'パスワードが一致しません',
+    'passwordSaved': 'パスワードを保存しました',
     'login': 'ログイン',
-    'firstLogin': '初回ログインで端末に登録・初期パスワード：123456',
+    'firstLogin': '初回ログインで端末に登録・ローカルパスワードを設定',
     'invalidAccount': '正しい電話番号またはメールを入力してください',
     'enterVehicle': '車両番号を入力してください',
     'invalidLogin': '電話番号、メールまたはパスワードが違います',
@@ -175,6 +217,13 @@ const _translations = <String, Map<String, String>>{
     'settings': '設定',
     'basicSettings': '基本設定',
     'accountVehicle': 'アカウントと車両',
+    'vehicleManagement': '車両管理',
+    'currentVehicle': '現在の車両',
+    'vehicleList': '車両一覧',
+    'addVehicle': '車両を追加',
+    'deleteVehicle': '車両を削除',
+    'switchVehicle': '車両を切り替え',
+    'vehicleLimit': '最大100台',
     'loginAccount': 'ログインアカウント',
     'changePassword': 'パスワード変更',
     'security': 'セキュリティ',
@@ -231,8 +280,17 @@ const _translations = <String, Map<String, String>>{
     'vehicle': 'Número del vehículo',
     'vehicleHint': 'Ejemplo: TAXI-001',
     'password': 'Contraseña',
+    'setPassword': 'Establecer contraseña',
+    'setPasswordHint': 'Define una contraseña local (mínimo 4 caracteres)',
+    'currentPassword': 'Contraseña actual',
+    'newPassword': 'Nueva contraseña',
+    'confirmPassword': 'Confirmar contraseña',
+    'passwordTooShort': 'La contraseña debe tener al menos 4 caracteres',
+    'passwordMismatch': 'Las contraseñas no coinciden',
+    'passwordSaved': 'Contraseña guardada',
     'login': 'Iniciar sesión',
-    'firstLogin': 'El primer acceso vincula el dispositivo · Clave: 123456',
+    'firstLogin':
+        'El primer acceso vincula el dispositivo · Define una clave local',
     'invalidAccount': 'Introduce un teléfono o correo válido',
     'enterVehicle': 'Introduce el número del vehículo',
     'invalidLogin': 'Teléfono, correo o contraseña incorrectos',
@@ -244,6 +302,13 @@ const _translations = <String, Map<String, String>>{
     'settings': 'Ajustes',
     'basicSettings': 'Ajustes básicos',
     'accountVehicle': 'Cuenta y vehículo',
+    'vehicleManagement': 'Gestión de vehículos',
+    'currentVehicle': 'Vehículo actual',
+    'vehicleList': 'Lista de vehículos',
+    'addVehicle': 'Añadir vehículo',
+    'deleteVehicle': 'Eliminar vehículo',
+    'switchVehicle': 'Cambiar vehículo',
+    'vehicleLimit': 'Hasta 100 vehículos',
     'loginAccount': 'Cuenta de acceso',
     'changePassword': 'Cambiar contraseña',
     'security': 'Seguridad',
@@ -338,6 +403,227 @@ class TaxiAccountingApp extends StatelessWidget {
   }
 }
 
+class Vehicle {
+  const Vehicle({required this.id, required this.number});
+
+  final String id;
+  final String number;
+
+  Map<String, dynamic> toJson() => {'id': id, 'number': number};
+
+  factory Vehicle.fromJson(Map<String, dynamic> json) {
+    final id = (json['id'] as String?)?.trim() ?? '';
+    final number = (json['number'] as String?)?.trim() ?? '';
+    if (id.isEmpty || number.isEmpty) {
+      throw const FormatException('车辆数据不完整');
+    }
+    return Vehicle(id: id, number: number);
+  }
+}
+
+class VehicleStore {
+  static const maxVehicles = 100;
+
+  static String recordsKey(String vehicleId) =>
+      '$_vehicleRecordsPrefix$vehicleId';
+
+  /// Migrates the old single-vehicle keys without changing their values.
+  /// Keeping the legacy keys makes rollback and existing backups safe.
+  static Future<void> migrateLegacyData(SharedPreferences preferences) async {
+    if (preferences.getString(_vehiclesKey) != null) {
+      return;
+    }
+
+    final legacyNumber = preferences.getString(_vehicleNumberKey)?.trim();
+    final legacyRecords = preferences.getString('taxi_records');
+    if ((legacyNumber == null || legacyNumber.isEmpty) &&
+        (legacyRecords == null || legacyRecords.isEmpty)) {
+      return;
+    }
+
+    const firstVehicle = Vehicle(id: _legacyVehicleId, number: '未设置车号');
+    final vehicle = Vehicle(
+      id: firstVehicle.id,
+      number: legacyNumber?.isNotEmpty == true
+          ? legacyNumber!
+          : firstVehicle.number,
+    );
+    await preferences.setString(_vehiclesKey, jsonEncode([vehicle.toJson()]));
+    await preferences.setString(_activeVehicleIdKey, vehicle.id);
+    if (legacyRecords != null && legacyRecords.isNotEmpty) {
+      await preferences.setString(recordsKey(vehicle.id), legacyRecords);
+    }
+  }
+
+  static Future<Vehicle> ensureActiveVehicle(
+    SharedPreferences preferences, {
+    String? preferredNumber,
+  }) async {
+    await migrateLegacyData(preferences);
+    final vehicles = _readVehicles(preferences);
+    final requestedNumber = preferredNumber?.trim();
+    if (vehicles.isEmpty) {
+      final number = requestedNumber?.isNotEmpty == true
+          ? requestedNumber!
+          : '未设置车号';
+      final vehicle = const Vehicle(id: _legacyVehicleId, number: '未设置车号');
+      final firstVehicle = Vehicle(id: vehicle.id, number: number);
+      await _writeVehicles(preferences, [firstVehicle]);
+      await preferences.setString(_activeVehicleIdKey, firstVehicle.id);
+      return firstVehicle;
+    }
+
+    final activeId = preferences.getString(_activeVehicleIdKey);
+    final activeIndex = vehicles.indexWhere(
+      (vehicle) => vehicle.id == activeId,
+    );
+    final index = activeIndex >= 0 ? activeIndex : 0;
+    var active = vehicles[index];
+    if (requestedNumber != null &&
+        requestedNumber.isNotEmpty &&
+        requestedNumber != active.number) {
+      final duplicate = vehicles.asMap().entries.any(
+        (entry) =>
+            entry.key != index &&
+            entry.value.number.toUpperCase() == requestedNumber.toUpperCase(),
+      );
+      if (duplicate) {
+        throw ArgumentError('车号已存在');
+      }
+      active = Vehicle(id: active.id, number: requestedNumber);
+      vehicles[index] = active;
+      await _writeVehicles(preferences, vehicles);
+    }
+    await preferences.setString(_activeVehicleIdKey, active.id);
+    await preferences.setString(_vehicleNumberKey, active.number);
+    return active;
+  }
+
+  static Vehicle? activeVehicle(SharedPreferences preferences) {
+    final vehicles = _readVehicles(preferences);
+    final activeId = preferences.getString(_activeVehicleIdKey);
+    for (final vehicle in vehicles) {
+      if (vehicle.id == activeId) {
+        return vehicle;
+      }
+    }
+    return vehicles.isEmpty ? null : vehicles.first;
+  }
+
+  static Future<List<Vehicle>> loadVehicles(
+    SharedPreferences preferences,
+  ) async {
+    await migrateLegacyData(preferences);
+    final vehicles = _readVehicles(preferences);
+    if (vehicles.isEmpty) {
+      final first = await ensureActiveVehicle(preferences);
+      return [first];
+    }
+    return vehicles;
+  }
+
+  static Future<Vehicle> addVehicle(
+    SharedPreferences preferences,
+    String number,
+  ) async {
+    final normalized = number.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError('车号不能为空');
+    }
+    final vehicles = await loadVehicles(preferences);
+    final duplicate = vehicles.any(
+      (vehicle) => vehicle.number.toUpperCase() == normalized.toUpperCase(),
+    );
+    if (duplicate) {
+      throw ArgumentError('车号已存在');
+    }
+    if (vehicles.length >= maxVehicles) {
+      throw StateError('最多添加 100 辆车');
+    }
+    final vehicle = Vehicle(
+      id: 'vehicle_${DateTime.now().microsecondsSinceEpoch}',
+      number: normalized,
+    );
+    await _writeVehicles(preferences, [...vehicles, vehicle]);
+    return vehicle;
+  }
+
+  static Future<Vehicle> setActiveVehicle(
+    SharedPreferences preferences,
+    String vehicleId,
+  ) async {
+    final vehicles = await loadVehicles(preferences);
+    final vehicle = vehicles.firstWhere(
+      (item) => item.id == vehicleId,
+      orElse: () => throw StateError('车辆不存在'),
+    );
+    await preferences.setString(_activeVehicleIdKey, vehicle.id);
+    await preferences.setString(_vehicleNumberKey, vehicle.number);
+    return vehicle;
+  }
+
+  static Future<Vehicle> deleteVehicle(
+    SharedPreferences preferences,
+    String vehicleId,
+  ) async {
+    final vehicles = await loadVehicles(preferences);
+    if (vehicles.length <= 1) {
+      throw StateError('至少保留一辆车');
+    }
+    final index = vehicles.indexWhere((item) => item.id == vehicleId);
+    if (index < 0) {
+      throw StateError('车辆不存在');
+    }
+    final wasActive = preferences.getString(_activeVehicleIdKey) == vehicleId;
+    final remaining = [...vehicles]..removeAt(index);
+    await _writeVehicles(preferences, remaining);
+    await preferences.remove(recordsKey(vehicleId));
+    if (wasActive) {
+      final next = remaining.first;
+      await preferences.setString(_activeVehicleIdKey, next.id);
+      await preferences.setString(_vehicleNumberKey, next.number);
+      return next;
+    }
+    return activeVehicle(preferences) ?? remaining.first;
+  }
+
+  static List<Vehicle> _readVehicles(SharedPreferences preferences) {
+    final raw = preferences.getString(_vehiclesKey);
+    if (raw == null || raw.isEmpty) {
+      return [];
+    }
+    try {
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      final vehicles = <Vehicle>[];
+      for (final item in decoded) {
+        if (vehicles.length >= maxVehicles) {
+          break;
+        }
+        try {
+          vehicles.add(Vehicle.fromJson(item as Map<String, dynamic>));
+        } catch (_) {
+          // Ignore malformed entries while preserving valid vehicles.
+        }
+      }
+      return vehicles;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> _writeVehicles(
+    SharedPreferences preferences,
+    List<Vehicle> vehicles,
+  ) async {
+    await preferences.setString(
+      _vehiclesKey,
+      jsonEncode(
+        vehicles.take(maxVehicles).map((vehicle) => vehicle.toJson()).toList(),
+      ),
+    );
+  }
+}
+
 class AppStartPage extends StatefulWidget {
   const AppStartPage({super.key});
 
@@ -346,10 +632,16 @@ class AppStartPage extends StatefulWidget {
 }
 
 class _AppStartPageState extends State<AppStartPage> {
+  Future<SharedPreferences> _loadPreferences() async {
+    final preferences = await SharedPreferences.getInstance();
+    await VehicleStore.migrateLegacyData(preferences);
+    return preferences;
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<SharedPreferences>(
-      future: SharedPreferences.getInstance(),
+      future: _loadPreferences(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Scaffold(
@@ -360,9 +652,21 @@ class _AppStartPageState extends State<AppStartPage> {
         final account = preferences.getString(_accountKey);
         final vehicleNumber = preferences.getString(_vehicleNumberKey);
         final loggedIn = preferences.getBool(_loggedInKey) ?? false;
-        final startupPassword = preferences.getBool(_startupPasswordKey) ?? false;
-        if (loggedIn && account != null && vehicleNumber != null && !startupPassword) {
-          return HomePage(account: account, vehicleNumber: vehicleNumber);
+        final startupPassword =
+            preferences.getBool(_startupPasswordKey) ?? false;
+        final hasPassword =
+            preferences.getString(_passwordKey)?.isNotEmpty ?? false;
+        if (loggedIn &&
+            account != null &&
+            vehicleNumber != null &&
+            hasPassword &&
+            !startupPassword) {
+          final activeVehicle = VehicleStore.activeVehicle(preferences);
+          return HomePage(
+            account: account,
+            vehicleNumber: activeVehicle?.number ?? vehicleNumber,
+            activeVehicleId: activeVehicle?.id,
+          );
         }
         return const LoginPage();
       },
@@ -392,6 +696,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _loadSavedLoginInformation() async {
     final preferences = await SharedPreferences.getInstance();
+    await VehicleStore.migrateLegacyData(preferences);
     final savedVehicle = preferences.getString(_vehicleNumberKey);
     final savedAccount = preferences.getString(_accountKey);
     if (mounted) {
@@ -412,10 +717,80 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  Future<String?> _showPasswordSetupDialog() async {
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(tr('setPassword')),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                tr('setPasswordHint'),
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: newController,
+                autofocus: true,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: tr('newPassword'),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.length < 4) {
+                    return tr('passwordTooShort');
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: confirmController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: tr('confirmPassword'),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) =>
+                    value == newController.text ? null : tr('passwordMismatch'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, newController.text);
+              }
+            },
+            child: Text(tr('save')),
+          ),
+        ],
+      ),
+    );
+    // The dialog route owns the fields until its exit animation completes.
+    // Do not dispose these controllers synchronously here; doing so can make
+    // the closing route rebuild with a disposed controller.
+    return password;
+  }
+
   Future<void> _login() async {
     final account = _usernameController.text.trim().toLowerCase();
     final vehicleNumber = _vehicleNumberController.text.trim();
-    final password = _passwordController.text;
+    var password = _passwordController.text;
 
     final isPhone = RegExp(r'^\+?[0-9]{7,15}$').hasMatch(account);
     final isEmail = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(account);
@@ -434,20 +809,44 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     final preferences = await SharedPreferences.getInstance();
-    final savedPassword = preferences.getString(_passwordKey) ?? '123456';
+    var savedPassword = preferences.getString(_passwordKey);
+    if (savedPassword == null || savedPassword.isEmpty) {
+      final newPassword = await _showPasswordSetupDialog();
+      if (newPassword == null) {
+        return;
+      }
+      await preferences.setString(_passwordKey, newPassword);
+      savedPassword = newPassword;
+      // On first use there is no existing password to verify. The password
+      // just created in the setup dialog is the credential for this login.
+      password = newPassword;
+    }
     final savedAccount = preferences.getString(_accountKey);
     final accountMatches = savedAccount == null || savedAccount == account;
     if (accountMatches && password == savedPassword) {
       await preferences.setString(_accountKey, account);
       await preferences.setString(_vehicleNumberKey, vehicleNumber);
       await preferences.setBool(_loggedInKey, true);
+      late final Vehicle activeVehicle;
+      try {
+        activeVehicle = await VehicleStore.ensureActiveVehicle(
+          preferences,
+          preferredNumber: vehicleNumber,
+        );
+      } on ArgumentError catch (error) {
+        setState(() => _errorMessage = error.message?.toString());
+        return;
+      }
       if (!mounted) {
         return;
       }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) =>
-              HomePage(account: account, vehicleNumber: vehicleNumber),
+          builder: (_) => HomePage(
+            account: account,
+            vehicleNumber: activeVehicle.number,
+            activeVehicleId: activeVehicle.id,
+          ),
         ),
       );
       return;
@@ -571,6 +970,8 @@ class SettingsPage extends StatefulWidget {
     required this.onAccountChanged,
     required this.onVehicleNumberChanged,
     required this.onClearRecords,
+    required this.activeVehicleId,
+    required this.onVehicleChanged,
   });
 
   final String account;
@@ -579,6 +980,8 @@ class SettingsPage extends StatefulWidget {
   final Future<void> Function(String value) onAccountChanged;
   final Future<void> Function(String value) onVehicleNumberChanged;
   final Future<void> Function() onClearRecords;
+  final String activeVehicleId;
+  final Future<void> Function(Vehicle vehicle) onVehicleChanged;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -588,6 +991,8 @@ class _SettingsPageState extends State<SettingsPage> {
   late String _account;
   late String _vehicleNumber;
   late int _recordCount;
+  late String _activeVehicleId;
+  List<Vehicle> _vehicles = [];
   bool _startupPassword = false;
 
   @override
@@ -596,7 +1001,144 @@ class _SettingsPageState extends State<SettingsPage> {
     _account = widget.account;
     _vehicleNumber = widget.vehicleNumber;
     _recordCount = widget.recordCount;
+    _activeVehicleId = widget.activeVehicleId;
     _loadSecuritySettings();
+    _loadVehicles();
+  }
+
+  Future<void> _loadVehicles() async {
+    final preferences = await SharedPreferences.getInstance();
+    final vehicles = await VehicleStore.loadVehicles(preferences);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _vehicles = vehicles;
+      if (!_vehicles.any((vehicle) => vehicle.id == _activeVehicleId)) {
+        _activeVehicleId = vehicles.first.id;
+      }
+    });
+  }
+
+  Future<void> _addVehicle() async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final number = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('addVehicle')),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            decoration: InputDecoration(
+              labelText: tr('vehicle'),
+              hintText: tr('vehicleHint'),
+              border: const OutlineInputBorder(),
+            ),
+            validator: (value) => value == null || value.trim().isEmpty
+                ? tr('enterVehicle')
+                : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, controller.text.trim());
+              }
+            },
+            child: Text(tr('save')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (number == null || !mounted) {
+      return;
+    }
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await VehicleStore.addVehicle(preferences, number);
+      await _loadVehicles();
+      _message('${tr('addVehicle')}：$number');
+    } on ArgumentError catch (error) {
+      _message(error.message?.toString() ?? '车号无效');
+    } on StateError catch (error) {
+      _message(error.message);
+    }
+  }
+
+  Future<void> _switchVehicle(Vehicle vehicle) async {
+    if (vehicle.id == _activeVehicleId) {
+      return;
+    }
+    final preferences = await SharedPreferences.getInstance();
+    final active = await VehicleStore.setActiveVehicle(preferences, vehicle.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _activeVehicleId = active.id;
+      _vehicleNumber = active.number;
+    });
+    await widget.onVehicleChanged(active);
+    if (mounted) {
+      _message('${tr('currentVehicle')}：${active.number}');
+    }
+  }
+
+  Future<void> _deleteVehicle(Vehicle vehicle) async {
+    if (_vehicles.length <= 1) {
+      _message('至少保留一辆车');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('deleteVehicle')),
+        content: Text('确定删除车号 ${vehicle.number} 吗？该车辆的流水也会删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr('cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFF05C4D),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(tr('deleteVehicle')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final active = await VehicleStore.deleteVehicle(preferences, vehicle.id);
+      await _loadVehicles();
+      if (mounted) {
+        setState(() {
+          _activeVehicleId = active.id;
+          _vehicleNumber = active.number;
+        });
+      }
+      await widget.onVehicleChanged(active);
+      if (mounted) {
+        _message('${tr('deleteVehicle')}：${vehicle.number}');
+      }
+    } on StateError catch (error) {
+      _message(error.message);
+    }
   }
 
   Future<void> _loadSecuritySettings() async {
@@ -759,11 +1301,85 @@ class _SettingsPageState extends State<SettingsPage> {
     if (value == null || !mounted) {
       return;
     }
-    await widget.onVehicleNumberChanged(value);
+    try {
+      await widget.onVehicleNumberChanged(value);
+    } on ArgumentError catch (error) {
+      if (mounted) {
+        _message(error.message?.toString() ?? '车号无效');
+      }
+      return;
+    }
     if (mounted) {
       setState(() => _vehicleNumber = value);
+      await _loadVehicles();
       _message('车号已更新');
     }
+  }
+
+  Future<String?> _promptNewPassword() async {
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final password = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('setPassword')),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                tr('setPasswordHint'),
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: newController,
+                autofocus: true,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: tr('newPassword'),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) => value == null || value.length < 4
+                    ? tr('passwordTooShort')
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: confirmController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: tr('confirmPassword'),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) =>
+                    value == newController.text ? null : tr('passwordMismatch'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, newController.text);
+              }
+            },
+            child: Text(tr('save')),
+          ),
+        ],
+      ),
+    );
+    // The dialog route owns the fields until its exit animation completes.
+    // Do not dispose these controllers synchronously here; doing so can make
+    // the closing route rebuild with a disposed controller.
+    return password;
   }
 
   Future<void> _changePassword() async {
@@ -771,7 +1387,17 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) {
       return;
     }
-    final currentPassword = preferences.getString(_passwordKey) ?? '123456';
+    final currentPassword = preferences.getString(_passwordKey);
+    if (currentPassword == null || currentPassword.isEmpty) {
+      final password = await _promptNewPassword();
+      if (password != null) {
+        await preferences.setString(_passwordKey, password);
+        if (mounted) {
+          _message(tr('passwordSaved'));
+        }
+      }
+      return;
+    }
     final oldController = TextEditingController();
     final newController = TextEditingController();
     final confirmController = TextEditingController();
@@ -788,17 +1414,17 @@ class _SettingsPageState extends State<SettingsPage> {
               TextFormField(
                 controller: oldController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: '当前密码'),
+                decoration: InputDecoration(labelText: tr('currentPassword')),
                 validator: (value) =>
                     value == currentPassword ? null : '当前密码不正确',
               ),
               TextFormField(
                 controller: newController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: '新密码'),
+                decoration: InputDecoration(labelText: tr('newPassword')),
                 validator: (value) {
                   if (value == null || value.length < 4) {
-                    return '新密码至少需要 4 位';
+                    return tr('passwordTooShort');
                   }
                   return null;
                 },
@@ -806,9 +1432,9 @@ class _SettingsPageState extends State<SettingsPage> {
               TextFormField(
                 controller: confirmController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: '再次输入新密码'),
+                decoration: InputDecoration(labelText: tr('confirmPassword')),
                 validator: (value) =>
-                    value == newController.text ? null : '两次密码不一致',
+                    value == newController.text ? null : tr('passwordMismatch'),
               ),
             ],
           ),
@@ -835,9 +1461,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _message('登录密码已修改');
       }
     }
-    oldController.dispose();
-    newController.dispose();
-    confirmController.dispose();
+    // The dialog route owns these fields until its exit animation completes.
   }
 
   Future<void> _clearRecords() async {
@@ -845,7 +1469,11 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) {
       return;
     }
-    final savedPassword = preferences.getString(_passwordKey) ?? '123456';
+    final savedPassword = preferences.getString(_passwordKey);
+    if (savedPassword == null || savedPassword.isEmpty) {
+      _message(tr('setPasswordHint'));
+      return;
+    }
     final passwordController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     final passwordVerified = await showDialog<bool>(
@@ -888,7 +1516,9 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
-    passwordController.dispose();
+    // Keep the controller alive until the password dialog route has finished
+    // its exit animation; disposing synchronously can trigger a rebuild with
+    // a disposed controller.
     if (passwordVerified != true || !mounted) {
       return;
     }
@@ -984,6 +1614,71 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: Text(tr('changePassword')),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _changePassword,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          _SettingsSectionTitle(tr('vehicleManagement')),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.local_taxi),
+                  title: Text(tr('currentVehicle')),
+                  trailing: Text(
+                    _vehicleNumber,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const Divider(height: 1, indent: 56),
+                if (_vehicles.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  )
+                else
+                  for (final vehicle in _vehicles)
+                    ListTile(
+                      leading: Icon(
+                        vehicle.id == _activeVehicleId
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        color: vehicle.id == _activeVehicleId
+                            ? yellow
+                            : Colors.grey,
+                      ),
+                      title: Text(vehicle.number),
+                      subtitle: vehicle.id == _activeVehicleId
+                          ? Text(tr('currentVehicle'))
+                          : TextButton(
+                              onPressed: () => _switchVehicle(vehicle),
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                alignment: Alignment.centerLeft,
+                              ),
+                              child: Text(tr('switchVehicle')),
+                            ),
+                      trailing: IconButton(
+                        tooltip: tr('deleteVehicle'),
+                        onPressed: () => _deleteVehicle(vehicle),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Color(0xFFF05C4D),
+                        ),
+                      ),
+                      onTap: () => _switchVehicle(vehicle),
+                    ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.add_circle_outline),
+                  title: Text(tr('addVehicle')),
+                  subtitle: Text(
+                    '${_vehicles.length}/100 · ${tr('vehicleLimit')}',
+                  ),
+                  onTap: _vehicles.length >= VehicleStore.maxVehicles
+                      ? null
+                      : _addVehicle,
                 ),
               ],
             ),
@@ -1100,10 +1795,12 @@ class HomePage extends StatefulWidget {
     super.key,
     required this.account,
     required this.vehicleNumber,
+    this.activeVehicleId,
   });
 
   final String account;
   final String vehicleNumber;
+  final String? activeVehicleId;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -1116,17 +1813,20 @@ class _HomePageState extends State<HomePage> {
   final List<TaxiRecord> _records = [];
   late String _account;
   late String _vehicleNumber;
+  late String _activeVehicleId;
   DateTime _selectedMonth = DateTime.now();
   int _currentTab = 0;
   int _statisticsRange = 0;
   int _statisticsOffset = 0;
   bool _statisticsShowExpense = true;
+  final Set<String> _expandedDateKeys = <String>{};
 
   @override
   void initState() {
     super.initState();
     _account = widget.account;
     _vehicleNumber = widget.vehicleNumber;
+    _activeVehicleId = widget.activeVehicleId ?? _legacyVehicleId;
     _loadRecords();
   }
 
@@ -1147,7 +1847,17 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadRecords() async {
     try {
       final preferences = await SharedPreferences.getInstance();
-      final stored = preferences.getString(_recordsKey);
+      final activeVehicle = await VehicleStore.ensureActiveVehicle(
+        preferences,
+        preferredNumber: _vehicleNumber,
+      );
+      _activeVehicleId = activeVehicle.id;
+      _vehicleNumber = activeVehicle.number;
+      final stored =
+          preferences.getString(VehicleStore.recordsKey(_activeVehicleId)) ??
+          // Fallback keeps data readable if an interrupted migration left
+          // only the old key behind.
+          preferences.getString(_recordsKey);
       if (stored == null || stored.isEmpty) {
         return;
       }
@@ -1169,14 +1879,27 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _saveRecords() async {
     final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
-      _recordsKey,
-      jsonEncode(_records.map((record) => record.toJson()).toList()),
+    final encoded = jsonEncode(
+      _records.map((record) => record.toJson()).toList(),
     );
+    await preferences.setString(
+      VehicleStore.recordsKey(_activeVehicleId),
+      encoded,
+    );
+    // Keep the legacy key mirrored for the first vehicle so older builds can
+    // still open the current vehicle's data after an upgrade.
+    if (_activeVehicleId == _legacyVehicleId) {
+      await preferences.setString(_recordsKey, encoded);
+    }
   }
 
   Future<void> _updateVehicleNumber(String value) async {
     final preferences = await SharedPreferences.getInstance();
+    final activeVehicle = await VehicleStore.ensureActiveVehicle(
+      preferences,
+      preferredNumber: value,
+    );
+    _activeVehicleId = activeVehicle.id;
     await preferences.setString(_vehicleNumberKey, value);
     if (mounted) {
       setState(() => _vehicleNumber = value);
@@ -1193,7 +1916,26 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _clearAllRecords() async {
     setState(_records.clear);
-    await _saveRecords();
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(VehicleStore.recordsKey(_activeVehicleId));
+    if (_activeVehicleId == _legacyVehicleId) {
+      await preferences.remove(_recordsKey);
+    }
+  }
+
+  Future<void> _switchVehicle(Vehicle vehicle) async {
+    final preferences = await SharedPreferences.getInstance();
+    await VehicleStore.setActiveVehicle(preferences, vehicle.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _activeVehicleId = vehicle.id;
+      _vehicleNumber = vehicle.number;
+      _records.clear();
+      _expandedDateKeys.clear();
+    });
+    await _loadRecords();
   }
 
   Future<void> _openSettings() async {
@@ -1206,6 +1948,8 @@ class _HomePageState extends State<HomePage> {
           onAccountChanged: _updateAccount,
           onVehicleNumberChanged: _updateVehicleNumber,
           onClearRecords: _clearAllRecords,
+          activeVehicleId: _activeVehicleId,
+          onVehicleChanged: _switchVehicle,
         ),
       ),
     );
@@ -1237,9 +1981,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _editRecord(TaxiRecord record) async {
     final updated = await Navigator.of(context).push<TaxiRecord>(
-      MaterialPageRoute(
-        builder: (_) => AddRecordPage(initialRecord: record),
-      ),
+      MaterialPageRoute(builder: (_) => AddRecordPage(initialRecord: record)),
     );
     if (updated == null) {
       return;
@@ -1624,7 +2366,7 @@ class _HomePageState extends State<HomePage> {
 
       final rawAmount = parseNumber(cell(row, amountColumn));
       final rawExpense = parseNumber(cell(row, expenseColumn));
-      final incomeAmount = rawAmount == null ? null : rawAmount.abs();
+      final incomeAmount = rawAmount?.abs();
       var income = 0.0;
       var energyCost = parseNumber(cell(row, energyColumn))?.abs() ?? 0.0;
       var vehicleRent = parseNumber(cell(row, rentColumn))?.abs() ?? 0.0;
@@ -1684,6 +2426,7 @@ class _HomePageState extends State<HomePage> {
     if (selected != null) {
       setState(() {
         _selectedMonth = DateTime(selected.year, selected.month);
+        _expandedDateKeys.clear();
       });
     }
   }
@@ -2438,122 +3181,179 @@ class _HomePageState extends State<HomePage> {
                         Builder(
                           builder: (context) {
                             final date = entry.value.first.date;
+                            final dateKey = _dateKey(date);
                             final dailyIncome = entry.value.fold<double>(
                               0,
                               (sum, record) => sum + record.income,
                             );
-                            return Container(
-                              color: Colors.white,
-                              padding: const EdgeInsets.fromLTRB(
-                                20,
-                                14,
-                                18,
-                                12,
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 5,
-                                    height: 22,
-                                    decoration: BoxDecoration(
-                                      color: yellow,
-                                      borderRadius: BorderRadius.circular(3),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${date.month.toString().padLeft(2, '0')}月'
-                                    '${date.day.toString().padLeft(2, '0')}日 '
-                                    '${_weekday(date)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 17,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    '收入：${dailyIncome.toStringAsFixed(2)}',
-                                    style: const TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
+                            final dailyExpense = entry.value.fold<double>(
+                              0,
+                              (sum, record) => sum + record.totalCost,
                             );
-                          },
-                        ),
-                        for (final record in entry.value)
-                          InkWell(
-                            onTap: () => _editRecord(record),
-                            child: Container(
-                              color: Colors.white,
-                              padding: const EdgeInsets.fromLTRB(22, 16, 8, 16),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 7,
-                                    height: 7,
-                                    margin: const EdgeInsets.only(top: 9),
-                                    decoration: const BoxDecoration(
-                                      color: orange,
-                                      shape: BoxShape.circle,
+                            final dailyNet = dailyIncome - dailyExpense;
+                            final expanded = _expandedDateKeys.contains(
+                              dateKey,
+                            );
+                            return InkWell(
+                              key: ValueKey('date-group-$dateKey'),
+                              onTap: () {
+                                setState(() {
+                                  if (expanded) {
+                                    _expandedDateKeys.remove(dateKey);
+                                  } else {
+                                    _expandedDateKeys.add(dateKey);
+                                  }
+                                });
+                              },
+                              child: Container(
+                                color: Colors.white,
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  14,
+                                  12,
+                                  12,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 5,
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        color: yellow,
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        '${date.month.toString().padLeft(2, '0')}月'
+                                        '${date.day.toString().padLeft(2, '0')}日 '
+                                        '${_weekday(date)}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 17,
+                                        ),
+                                      ),
+                                    ),
+                                    Column(
                                       crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                          CrossAxisAlignment.end,
                                       children: [
                                         Text(
-                                          record.note.isEmpty
-                                              ? '出租车收入'
-                                              : record.note,
-                                          style: const TextStyle(fontSize: 19),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          '里程 ${record.distance.toStringAsFixed(1)} km　'
-                                          '支出 ¥${record.totalCost.toStringAsFixed(2)}',
+                                          '收入：¥${dailyIncome.toStringAsFixed(2)}',
                                           style: const TextStyle(
                                             color: Colors.grey,
                                             fontSize: 13,
                                           ),
                                         ),
+                                        Text(
+                                          '支出：¥${dailyExpense.toStringAsFixed(2)}  '
+                                          '净收入：¥${dailyNet.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            color: dailyNet >= 0
+                                                ? Colors.grey
+                                                : orange,
+                                            fontSize: 13,
+                                          ),
+                                        ),
                                       ],
                                     ),
-                                  ),
-                                  Text(
-                                    '+${record.income.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      color: orange,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
+                                    Icon(
+                                      expanded
+                                          ? Icons.keyboard_arrow_up
+                                          : Icons.keyboard_arrow_down,
+                                      color: Colors.grey,
                                     ),
-                                  ),
-                                  PopupMenuButton<String>(
-                                    tooltip: tr('editRecord'),
-                                    onSelected: (action) {
-                                      if (action == 'edit') {
-                                        _editRecord(record);
-                                      } else if (action == 'delete') {
-                                        _deleteRecord(record);
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      PopupMenuItem(
-                                        value: 'edit',
-                                        child: Text(tr('editRecord')),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        if (_expandedDateKeys.contains(
+                          _dateKey(entry.value.first.date),
+                        ))
+                          for (final record in entry.value)
+                            InkWell(
+                              onTap: () => _editRecord(record),
+                              child: Container(
+                                color: Colors.white,
+                                padding: const EdgeInsets.fromLTRB(
+                                  22,
+                                  16,
+                                  8,
+                                  16,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 7,
+                                      height: 7,
+                                      margin: const EdgeInsets.only(top: 9),
+                                      decoration: const BoxDecoration(
+                                        color: orange,
+                                        shape: BoxShape.circle,
                                       ),
-                                      PopupMenuItem(
-                                        value: 'delete',
-                                        child: Text(tr('deleteRecord')),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            record.note.isEmpty
+                                                ? '出租车收入'
+                                                : record.note,
+                                            style: const TextStyle(
+                                              fontSize: 19,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            '里程 ${record.distance.toStringAsFixed(1)} km　'
+                                            '支出 ¥${record.totalCost.toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                ],
+                                    ),
+                                    Text(
+                                      '+${record.income.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        color: orange,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      tooltip: tr('editRecord'),
+                                      onSelected: (action) {
+                                        if (action == 'edit') {
+                                          _editRecord(record);
+                                        } else if (action == 'delete') {
+                                          _deleteRecord(record);
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        PopupMenuItem(
+                                          value: 'edit',
+                                          child: Text(tr('editRecord')),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Text(tr('deleteRecord')),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
                         const Divider(height: 1, indent: 46),
                       ],
                       const SizedBox(height: 120),

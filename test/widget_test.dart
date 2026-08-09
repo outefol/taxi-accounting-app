@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +7,61 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:taxi_accounting_app/main.dart';
 
 void main() {
+  test('旧版单车数据迁移到第一辆车', () async {
+    final legacyRecords = jsonEncode([
+      {
+        'date': '2026-08-09T00:00:00.000',
+        'income': 500.0,
+        'distance': 120.0,
+        'energyCost': 80.0,
+        'vehicleRent': 50.0,
+        'note': '旧数据',
+      },
+    ]);
+    SharedPreferences.setMockInitialValues({
+      'vehicle_number': '沪A12345',
+      'taxi_records': legacyRecords,
+    });
+
+    final preferences = await SharedPreferences.getInstance();
+    await VehicleStore.migrateLegacyData(preferences);
+
+    expect(preferences.getString('active_vehicle_id'), 'vehicle_1');
+    final vehicles =
+        jsonDecode(preferences.getString('vehicles_v2')!) as List<dynamic>;
+    expect(vehicles.single['number'], '沪A12345');
+    expect(
+      preferences.getString('taxi_records_vehicle_vehicle_1'),
+      legacyRecords,
+    );
+  });
+
+  test('车辆管理遵守数量、重复和切换规则', () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final first = await VehicleStore.ensureActiveVehicle(
+      preferences,
+      preferredNumber: '沪A11111',
+    );
+    final second = await VehicleStore.addVehicle(preferences, '沪A22222');
+
+    expect(first.number, '沪A11111');
+    expect(second.number, '沪A22222');
+    await expectLater(
+      VehicleStore.addVehicle(preferences, '沪a22222'),
+      throwsA(isA<ArgumentError>()),
+    );
+
+    await VehicleStore.setActiveVehicle(preferences, second.id);
+    expect(preferences.getString('active_vehicle_id'), second.id);
+    final fallback = await VehicleStore.deleteVehicle(preferences, second.id);
+    expect(fallback.id, first.id);
+    await expectLater(
+      VehicleStore.deleteVehicle(preferences, first.id),
+      throwsA(isA<StateError>()),
+    );
+  });
+
   testWidgets('添加流水后自动计算净收入', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const TaxiAccountingApp());
@@ -18,6 +75,13 @@ void main() {
     await tester.enterText(loginFields.at(1), '沪A12345');
     await tester.enterText(loginFields.at(2), '123456');
     await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置密码'), findsOneWidget);
+    final passwordFields = find.byType(TextFormField);
+    await tester.enterText(passwordFields.at(0), '2468');
+    await tester.enterText(passwordFields.at(1), '2468');
+    await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('添加流水'), findsOneWidget);
@@ -40,11 +104,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('¥ 370.00'), findsOneWidget);
+    expect(find.text('+500.00'), findsNothing);
+    expect(find.textContaining('净收入：¥370.00'), findsOneWidget);
+    await tester.tap(find.text('收入：¥500.00'));
+    await tester.pumpAndSettle();
     expect(find.text('+500.00'), findsOneWidget);
     expect(find.textContaining('里程 120.0 km'), findsOneWidget);
     expect(find.textContaining('月收入：¥ 500.00'), findsOneWidget);
     expect(find.textContaining('月支出：¥ 130.00'), findsOneWidget);
     expect(find.textContaining('晚班'), findsOneWidget);
+    await tester.tap(find.text('收入：¥500.00'));
+    await tester.pumpAndSettle();
+    expect(find.text('+500.00'), findsNothing);
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getString('taxi_records'), contains('"income":500.0'));
 
@@ -72,6 +143,11 @@ void main() {
     expect(find.text('13800138000'), findsOneWidget);
     expect(find.text('修改登录密码'), findsOneWidget);
     expect(find.text('立即锁定'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('清空全部流水'),
+      400,
+      scrollable: find.byType(Scrollable),
+    );
     expect(find.text('清空全部流水'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
