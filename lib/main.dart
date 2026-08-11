@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:csv/csv.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 const _passwordKey = 'login_password';
 const _vehicleNumberKey = 'vehicle_number';
@@ -1553,11 +1554,16 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _showAbout() {
+  void _showAbout() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (!mounted) {
+      return;
+    }
     showAboutDialog(
       context: context,
       applicationName: '出租车 / 网约车司机专业记账',
-      applicationVersion: '1.0.2',
+      applicationVersion:
+          '${packageInfo.version} (Build ${packageInfo.buildNumber})',
       applicationIcon: const Icon(
         Icons.local_taxi,
         size: 48,
@@ -2788,11 +2794,16 @@ class _HomePageState extends State<HomePage> {
       ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
     }
 
-    void showAbout() {
+    void showAbout() async {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (!mounted) {
+        return;
+      }
       showAboutDialog(
         context: context,
         applicationName: '出租车 / 网约车司机专业记账',
-        applicationVersion: '1.0.2',
+        applicationVersion:
+            '${packageInfo.version} (Build ${packageInfo.buildNumber})',
         applicationIcon: const Icon(Icons.local_taxi, size: 48, color: yellow),
         children: const [
           Text('本地单机出租车与网约车收入、支出和里程管理工具。'),
