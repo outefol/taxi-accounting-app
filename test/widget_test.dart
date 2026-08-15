@@ -2,11 +2,17 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:taxi_accounting_app/main.dart';
+import 'package:taxi_accounting_app/models/vehicle.dart';
 
 void main() {
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+  });
+
   test('旧版单车数据迁移到第一辆车', () async {
     final legacyRecords = jsonEncode([
       {
