@@ -44,7 +44,6 @@ const _translations = <String, Map<String, String>>{
     'invalidLogin': '手机号、邮箱或密码不正确',
     'details': '明细',
     'statistics': '统计',
-    'savings': '存钱',
     'mine': '我的',
     'addRecord': '添加流水',
     'settings': '设置',
@@ -128,7 +127,6 @@ const _translations = <String, Map<String, String>>{
     'invalidLogin': 'Incorrect phone, email, or password',
     'details': 'Details',
     'statistics': 'Statistics',
-    'savings': 'Savings',
     'mine': 'Me',
     'addRecord': 'Add record',
     'settings': 'Settings',
@@ -212,7 +210,6 @@ const _translations = <String, Map<String, String>>{
     'invalidLogin': '電話番号、メールまたはパスワードが違います',
     'details': '明細',
     'statistics': '統計',
-    'savings': '貯蓄',
     'mine': 'マイページ',
     'addRecord': '記録を追加',
     'settings': '設定',
@@ -297,7 +294,6 @@ const _translations = <String, Map<String, String>>{
     'invalidLogin': 'Teléfono, correo o contraseña incorrectos',
     'details': 'Detalles',
     'statistics': 'Estadísticas',
-    'savings': 'Ahorro',
     'mine': 'Mi cuenta',
     'addRecord': 'Añadir registro',
     'settings': 'Ajustes',
@@ -1574,9 +1570,20 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _lockApp() async {
-    // 修改退出逻辑：仅关闭当前设置页面返回上一级，不清除登录状态，也不跳转到登录页
-    if (!mounted) return;
+    final preferences = await SharedPreferences.getInstance();
+    final savedPassword = preferences.getString(_passwordKey);
+    if (savedPassword == null || savedPassword.isEmpty) {
+      _message(tr('setPasswordHint'));
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    // 返回主页面，然后弹出全屏锁屏页；输入正确密码后才能回到主页面。
     Navigator.of(context).pop();
+    appNavigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (_) => const LockScreenPage()),
+    );
   }
 
   @override
@@ -1776,6 +1783,135 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
+class LockScreenPage extends StatefulWidget {
+  const LockScreenPage({super.key});
+
+  @override
+  State<LockScreenPage> createState() => _LockScreenPageState();
+}
+
+class _LockScreenPageState extends State<LockScreenPage> {
+  final _passwordController = TextEditingController();
+  bool _hidePassword = true;
+  bool _checking = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _unlock() async {
+    final password = _passwordController.text;
+    if (password.isEmpty) {
+      setState(() => _errorMessage = tr('invalidLogin'));
+      return;
+    }
+    setState(() {
+      _checking = true;
+      _errorMessage = null;
+    });
+    final preferences = await SharedPreferences.getInstance();
+    final savedPassword = preferences.getString(_passwordKey);
+    final unlocked = savedPassword != null &&
+        savedPassword.isNotEmpty &&
+        password == savedPassword;
+    if (!mounted) {
+      return;
+    }
+    if (unlocked) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _checking = false;
+      _errorMessage = tr('invalidLogin');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.lock_outline,
+                        size: 64,
+                        color: Color(0xFFFFBE4F),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        tr('appTitle'),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(tr('password')),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _passwordController,
+                        autofocus: true,
+                        obscureText: _hidePassword,
+                        enabled: !_checking,
+                        decoration: InputDecoration(
+                          labelText: tr('password'),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            tooltip: _hidePassword ? '显示密码' : '隐藏密码',
+                            onPressed: () {
+                              setState(() {
+                                _hidePassword = !_hidePassword;
+                              });
+                            },
+                            icon: Icon(
+                              _hidePassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                          ),
+                        ),
+                        onSubmitted: (_) => _unlock(),
+                      ),
+                      if (_errorMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _errorMessage!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _checking ? null : _unlock,
+                          child: Text(tr('login')),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsSectionTitle extends StatelessWidget {
   const _SettingsSectionTitle(this.title);
 
@@ -1844,7 +1980,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _playCashSound() async {
     try {
-      await _audioPlayer.play(AssetSource('sounds/cash.mp3'));
+      await _audioPlayer.play(AssetSource('sounds/cash.wav'));
     } catch (_) {
       // 如果文件不存在或播放失败，静默处理，不干扰主逻辑
     }
