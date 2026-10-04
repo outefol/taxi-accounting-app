@@ -3,8 +3,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_keys.dart';
+import 'app_settings.dart';
 import 'i18n.dart';
 import 'password_store.dart';
+import 'db/record_store.dart';
 import 'models/vehicle.dart';
 import 'pages/login_page.dart';
 import 'pages/home_page.dart';
@@ -13,6 +15,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
   appLanguage.value = preferences.getString(languageKey) ?? 'zh';
+  await loadCurrencySymbol(preferences);
+  await VehicleStore.migrateLegacyData(preferences);
+  await RecordStore.ensureMigrated(preferences);
   runApp(const TaxiAccountingApp());
 }
 

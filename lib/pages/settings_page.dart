@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_keys.dart';
+import '../app_settings.dart';
 import '../i18n.dart';
 import '../password_store.dart';
 import '../models/vehicle.dart';
@@ -41,6 +42,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late String _activeVehicleId;
   List<Vehicle> _vehicles = [];
   bool _startupPassword = false;
+  double _fixedMonthly = 0;
 
   @override
   void initState() {
@@ -51,6 +53,15 @@ class _SettingsPageState extends State<SettingsPage> {
     _activeVehicleId = widget.activeVehicleId;
     _loadSecuritySettings();
     _loadVehicles();
+    _loadFixedCost();
+  }
+
+  Future<void> _loadFixedCost() async {
+    final preferences = await SharedPreferences.getInstance();
+    final value = await loadFixedCost(preferences, _activeVehicleId);
+    if (mounted) {
+      setState(() => _fixedMonthly = value);
+    }
   }
 
   Future<void> _loadVehicles() async {
@@ -135,6 +146,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _activeVehicleId = active.id;
       _vehicleNumber = active.number;
     });
+    await _loadFixedCost();
     await widget.onVehicleChanged(active);
     if (mounted) {
       _message('${tr('currentVehicle')}：${active.number}');
@@ -180,6 +192,7 @@ class _SettingsPageState extends State<SettingsPage> {
         });
       }
       await widget.onVehicleChanged(active);
+      await _loadFixedCost();
       if (mounted) {
         _message('${tr('deleteVehicle')}：${vehicle.number}');
       }
@@ -601,6 +614,131 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _editFixedCost() async {
+    final controller = TextEditingController(
+      text: _fixedMonthly == 0 ? '' : _fixedMonthly.toStringAsFixed(2),
+    );
+    final formKey = GlobalKey<FormState>();
+    final value = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('fixedCost')),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                tr('fixedCostHint'),
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText:
+                      '${tr('fixedCostMonthly')}（${currencySymbol.value}）',
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  final text = v?.trim() ?? '';
+                  if (text.isEmpty) return null;
+                  final number = double.tryParse(text);
+                  if (number == null || number < 0) {
+                    return tr('invalidNumber');
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                final text = controller.text.trim();
+                Navigator.pop(
+                  context,
+                  text.isEmpty ? 0.0 : double.parse(text),
+                );
+              }
+            },
+            child: Text(tr('save')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null || !mounted) return;
+    final preferences = await SharedPreferences.getInstance();
+    await saveFixedCost(preferences, _activeVehicleId, value);
+    setState(() => _fixedMonthly = value);
+    _message(tr('fixedCostSaved'));
+  }
+
+  Future<void> _selectCurrency() async {
+    const presets = ['¥', '\$', '€', '£', '₹', '₩'];
+    final controller = TextEditingController(text: currencySymbol.value);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(tr('currency')),
+        children: [
+          for (final symbol in presets)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, symbol),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      symbol,
+                      style: const TextStyle(fontSize: 20),
+                    ),
+                  ),
+                  if (symbol == currencySymbol.value)
+                    const Icon(Icons.check, color: Color(0xFFFFBE4F)),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+            child: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: tr('customCurrency'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+            child: FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, controller.text.trim()),
+              child: Text(tr('save')),
+            ),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (selected == null || selected.isEmpty || !mounted) return;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(currencyKey, selected);
+    currencySymbol.value = selected;
+    setState(() {});
+    _message(tr('currencySaved'));
+  }
+
   void _showAbout() async {
     final packageInfo = await PackageInfo.fromPlatform();
     if (!mounted) {
@@ -734,6 +872,25 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                 const Divider(height: 1, indent: 56),
                 ListTile(
+                  leading: const Icon(Icons.payments_outlined),
+                  title: Text(tr('fixedCost')),
+                  subtitle: Text(tr('fixedCostShortHint')),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _fixedMonthly == 0
+                            ? tr('notSet')
+                            : money(_fixedMonthly),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                  onTap: _editFixedCost,
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
                   leading: const Icon(Icons.add_circle_outline),
                   title: Text(tr('addVehicle')),
                   subtitle: Text(
@@ -818,6 +975,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                   onTap: _selectLanguage,
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.attach_money),
+                  title: Text(tr('currency')),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        currencySymbol.value,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                  onTap: _selectCurrency,
                 ),
                 const Divider(height: 1, indent: 56),
                 ListTile(

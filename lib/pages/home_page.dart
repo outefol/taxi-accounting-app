@@ -8,10 +8,14 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_keys.dart';
+import '../app_settings.dart';
+import '../db/record_store.dart';
 import '../i18n.dart';
+import '../models/expense_categories.dart';
 import '../models/taxi_record.dart';
 import '../models/vehicle.dart';
 import 'login_page.dart';
+import 'search_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -31,7 +35,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const _recordsKey = 'taxi_records';
   static const _fileChannel = MethodChannel('taxi_accounting_app/files');
   final _audioPlayer = AudioPlayer();
   final List<TaxiRecord> _records = [];
@@ -42,7 +45,9 @@ class _HomePageState extends State<HomePage> {
   int _currentTab = 0;
   int _statisticsRange = 0;
   int _statisticsOffset = 0;
-  bool _statisticsShowExpense = true;
+  // 0=支出，1=收入，2=净收入
+  int _statisticsMetric = 0;
+  double _fixedMonthly = 0;
   final Set<String> _expandedDateKeys = <String>{};
 
   @override
@@ -77,18 +82,8 @@ class _HomePageState extends State<HomePage> {
       );
       _activeVehicleId = activeVehicle.id;
       _vehicleNumber = activeVehicle.number;
-      final stored =
-          preferences.getString(VehicleStore.recordsKey(_activeVehicleId)) ??
-          // Fallback keeps data readable if an interrupted migration left
-          // only the old key behind.
-          preferences.getString(_recordsKey);
-      if (stored == null || stored.isEmpty) {
-        return;
-      }
-      final decoded = jsonDecode(stored) as List<dynamic>;
-      final records = decoded
-          .map((item) => TaxiRecord.fromJson(item as Map<String, dynamic>))
-          .toList();
+      _fixedMonthly = await loadFixedCost(preferences, _activeVehicleId);
+      final records = await RecordStore.loadRecords(_activeVehicleId);
       if (mounted) {
         setState(() {
           _records
@@ -98,22 +93,6 @@ class _HomePageState extends State<HomePage> {
       }
     } catch (_) {
       _showMessage(tr('loadRecordsFailed'));
-    }
-  }
-
-  Future<void> _saveRecords() async {
-    final preferences = await SharedPreferences.getInstance();
-    final encoded = jsonEncode(
-      _records.map((record) => record.toJson()).toList(),
-    );
-    await preferences.setString(
-      VehicleStore.recordsKey(_activeVehicleId),
-      encoded,
-    );
-    // Keep the legacy key mirrored for the first vehicle so older builds can
-    // still open the current vehicle's data after an upgrade.
-    if (_activeVehicleId == legacyVehicleId) {
-      await preferences.setString(_recordsKey, encoded);
     }
   }
 
@@ -139,11 +118,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _clearAllRecords() async {
-    setState(_records.clear);
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.remove(VehicleStore.recordsKey(_activeVehicleId));
-    if (_activeVehicleId == legacyVehicleId) {
-      await preferences.remove(_recordsKey);
+    await RecordStore.clearVehicleRecords(_activeVehicleId);
+    if (mounted) {
+      setState(_records.clear);
     }
   }
 
@@ -190,32 +167,54 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _addRecord() async {
     final record = await Navigator.of(context).push<TaxiRecord>(
-      MaterialPageRoute(builder: (_) => const AddRecordPage()),
+      MaterialPageRoute(
+        builder: (_) => AddRecordPage(fixedMonthly: _fixedMonthly),
+      ),
     );
 
     if (record != null) {
+      final saved = await RecordStore.insertRecord(_activeVehicleId, record);
+      if (!mounted) return;
       setState(() {
-        _records.add(record);
-        _selectedMonth = DateTime(record.date.year, record.date.month);
+        // 按日期倒序插入，保持列表有序。
+        final index = _records.indexWhere(
+          (r) =>
+              r.date.isBefore(saved.date) ||
+              (r.date.isAtSameMomentAs(saved.date) &&
+                  (r.id ?? 0) < (saved.id ?? 0)),
+        );
+        if (index < 0) {
+          _records.add(saved);
+        } else {
+          _records.insert(index, saved);
+        }
+        _selectedMonth = DateTime(saved.date.year, saved.date.month);
       });
-      await _saveRecords();
       await _playCashSound();
     }
   }
 
   Future<void> _editRecord(TaxiRecord record) async {
     final updated = await Navigator.of(context).push<TaxiRecord>(
-      MaterialPageRoute(builder: (_) => AddRecordPage(initialRecord: record)),
+      MaterialPageRoute(
+        builder: (_) =>
+            AddRecordPage(initialRecord: record, fixedMonthly: _fixedMonthly),
+      ),
     );
     if (updated == null) {
       return;
     }
-    final index = _records.indexOf(record);
-    if (index < 0) {
-      return;
+    final index = _records.indexWhere((r) => r.id == record.id);
+    final merged = updated.copyWith(id: record.id);
+    if (index >= 0) {
+      await RecordStore.updateRecord(_activeVehicleId, merged);
+      if (!mounted) return;
+      setState(() => _records[index] = merged);
+    } else {
+      final saved = await RecordStore.insertRecord(_activeVehicleId, merged);
+      if (!mounted) return;
+      setState(() => _records.add(saved));
     }
-    setState(() => _records[index] = updated);
-    await _saveRecords();
     _showMessage(tr('editRecord'));
   }
 
@@ -243,14 +242,17 @@ class _HomePageState extends State<HomePage> {
     if (confirmed != true) {
       return;
     }
-    setState(() => _records.remove(record));
-    await _saveRecords();
+    if (record.id != null) {
+      await RecordStore.deleteRecord(_activeVehicleId, record.id!);
+    }
+    if (!mounted) return;
+    setState(() => _records.removeWhere((r) => r.id == record.id));
     _showMessage(tr('recordDeleted'));
   }
 
   String _backupJson() {
     return const JsonEncoder.withIndent('  ').convert({
-      'version': 1,
+      'version': 2,
       'account': _account,
       'vehicleNumber': _vehicleNumber,
       'exportedAt': DateTime.now().toIso8601String(),
@@ -282,9 +284,21 @@ class _HomePageState extends State<HomePage> {
     return '"$text"';
   }
 
+  String _expenseBreakdown(TaxiRecord record) {
+    final entries = ExpenseCategories.keys
+        .where((key) => (record.expenses[key] ?? 0) > 0)
+        .map(
+          (key) =>
+              '${tr(ExpenseCategories.labelKey(key))}:'
+              '${record.expenses[key]!.toStringAsFixed(2)}',
+        )
+        .toList();
+    return entries.join('; ');
+  }
+
   Future<void> _exportCsv() async {
     final buffer = StringBuffer('\uFEFF');
-    buffer.writeln('日期,车号,收入,里程,油费电费,车辆租金,总支出,净收入,备注');
+    buffer.writeln('日期,车号,收入,里程,总支出,净收入,支出明细,备注');
     for (final record in _records) {
       buffer.writeln(
         [
@@ -292,10 +306,9 @@ class _HomePageState extends State<HomePage> {
           _csvValue(_vehicleNumber),
           record.income.toStringAsFixed(2),
           record.distance.toStringAsFixed(1),
-          record.energyCost.toStringAsFixed(2),
-          record.vehicleRent.toStringAsFixed(2),
           record.totalCost.toStringAsFixed(2),
-          (record.income - record.totalCost).toStringAsFixed(2),
+          record.net.toStringAsFixed(2),
+          _csvValue(_expenseBreakdown(record)),
           _csvValue(record.note),
         ].join(','),
       );
@@ -362,10 +375,19 @@ class _HomePageState extends State<HomePage> {
       if (confirmed != true) {
         return;
       }
+      final saved = await RecordStore.insertRecords(
+        _activeVehicleId,
+        newRecords,
+      );
+      if (!mounted) return;
       setState(() {
-        _records.addAll(newRecords);
+        _records.addAll(saved);
+        _records.sort((a, b) {
+          final dateCompare = b.date.compareTo(a.date);
+          if (dateCompare != 0) return dateCompare;
+          return (b.id ?? 0).compareTo(a.id ?? 0);
+        });
       });
-      await _saveRecords();
       _showMessage(trf('importSuccess', {'count': '${newRecords.length}'}));
     } on FormatException {
       _showMessage(tr('importFailedFormat'));
@@ -511,6 +533,12 @@ class _HomePageState extends State<HomePage> {
       'electricity',
     ]);
     final rentColumn = findColumn(['车辆租金', '车租', '租金', 'rent']);
+    final expenseDetailColumn = findColumn([
+      '支出明细',
+      '费用明细',
+      'expensedetail',
+      'breakdown',
+    ]);
     final noteColumn = findColumn([
       '备注',
       '说明',
@@ -598,17 +626,30 @@ class _HomePageState extends State<HomePage> {
       final rawExpense = parseNumber(cell(row, expenseColumn));
       final incomeAmount = rawAmount?.abs();
       var income = 0.0;
-      var energyCost = parseNumber(cell(row, energyColumn))?.abs() ?? 0.0;
-      var vehicleRent = parseNumber(cell(row, rentColumn))?.abs() ?? 0.0;
+      final expenses = <String, double>{};
+      void addExpense(String category, double? amount) {
+        final value = amount?.abs() ?? 0;
+        if (value > 0) {
+          expenses[category] = (expenses[category] ?? 0) + value;
+        }
+      }
 
-      // The taxi export has dedicated expense columns. The 懒猫 export has
-      // one amount column plus 收支类型/类别, so classify that amount here.
+      // 旧版导出的固定列。
+      addExpense('energy', parseNumber(cell(row, energyColumn)));
+      addExpense('rent', parseNumber(cell(row, rentColumn)));
+      // 新版导出的“支出明细”列：形如“油费/电费:100.00; 车辆租金:200.00”。
+      _parseExpenseBreakdown(cell(row, expenseDetailColumn), addExpense);
+
+      // The 懒猫 export has one amount column plus 收支类型/类别,
+      // so classify that amount here.
       if (isExpense) {
         final expenseAmount = (rawAmount ?? rawExpense)?.abs() ?? 0.0;
         if (description.contains('租')) {
-          vehicleRent = vehicleRent == 0 ? expenseAmount : vehicleRent;
-        } else if (energyCost == 0) {
-          energyCost = expenseAmount;
+          if ((expenses['rent'] ?? 0) == 0) {
+            addExpense('rent', expenseAmount);
+          }
+        } else if ((expenses['energy'] ?? 0) == 0) {
+          addExpense('energy', expenseAmount);
         }
       } else if (incomeAmount != null) {
         income = incomeAmount;
@@ -616,7 +657,7 @@ class _HomePageState extends State<HomePage> {
 
       // If a file only has a separate 支出 column, retain it as a cost.
       if (rawAmount == null && rawExpense != null && !isExpense) {
-        energyCost = rawExpense.abs();
+        addExpense('energy', rawExpense);
       }
 
       final distance = parseNumber(cell(row, distanceColumn))?.abs() ?? 0.0;
@@ -631,8 +672,7 @@ class _HomePageState extends State<HomePage> {
           date: date,
           income: income,
           distance: distance,
-          energyCost: energyCost,
-          vehicleRent: vehicleRent,
+          expenses: expenses,
           note: finalNote,
         ),
       );
@@ -643,6 +683,44 @@ class _HomePageState extends State<HomePage> {
       throw FormatException(tr('noValidRecords'));
     }
     return records;
+  }
+
+  /// 解析“支出明细”列：形如“油费/电费:100.00; 车辆租金:200.00”。
+  void _parseExpenseBreakdown(
+    String text,
+    void Function(String category, double? amount) addExpense,
+  ) {
+    if (text.trim().isEmpty) return;
+    for (final part in text.split(RegExp(r'[;；]'))) {
+      final match = RegExp(
+        r'(.+?)[:：]\s*([-+]?\d[\d,\s]*(?:\.\d+)?)',
+      ).firstMatch(part);
+      if (match == null) continue;
+      final name = match.group(1)!.trim();
+      final amount = double.tryParse(
+        match.group(2)!.replaceAll(RegExp(r'[\s,]'), ''),
+      );
+      if (amount == null) continue;
+      final key = _matchCategoryKey(name);
+      if (key != null) addExpense(key, amount);
+    }
+  }
+
+  String? _matchCategoryKey(String name) {
+    if (name.isEmpty) return null;
+    for (final key in ExpenseCategories.keys) {
+      final label = tr(ExpenseCategories.labelKey(key));
+      if (name.contains(label) || label.contains(name)) return key;
+    }
+    if (name.contains('油') || name.contains('电') || name.contains('气')) {
+      return 'energy';
+    }
+    if (name.contains('租')) return 'rent';
+    if (name.contains('保养') || name.contains('维修')) return 'maintenance';
+    if (name.contains('保险')) return 'insurance';
+    if (name.contains('罚款') || name.contains('罚')) return 'fine';
+    if (name.contains('洗车')) return 'wash';
+    return 'other';
   }
 
   Future<void> _chooseMonth() async {
@@ -661,16 +739,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _showComingSoon(String name) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(trf('comingSoon', {'name': name}))));
-  }
-
   String _dateKey(DateTime date) => '${date.year}-${date.month}-${date.day}';
 
-  String _weekday(DateTime date) {
-    final names = [
+  String _weekday(DateTime date) {    final names = [
       tr('weekdayMon'),
       tr('weekdayTue'),
       tr('weekdayWed'),
@@ -680,6 +751,19 @@ class _HomePageState extends State<HomePage> {
       tr('weekdaySun'),
     ];
     return names[date.weekday - 1];
+  }
+
+  Color _rankColor(int index) {
+    const colors = [
+      Color(0xFFF05C4D),
+      Color(0xFFFFBE4F),
+      Color(0xFF4CAF50),
+      Color(0xFF2196F3),
+      Color(0xFF9C27B0),
+      Color(0xFFFF9800),
+      Color(0xFF607D8B),
+    ];
+    return colors[index % colors.length];
   }
 
   Widget _buildStatisticsBody() {
@@ -757,32 +841,64 @@ class _HomePageState extends State<HomePage> {
     bool isInRange(DateTime date, DateTime start, DateTime end) =>
         !date.isBefore(start) && date.isBefore(end);
 
-    double recordValue(TaxiRecord record) =>
-        _statisticsShowExpense ? record.totalCost : record.income;
+    // 月固定成本按 30 天分摊到每一天。
+    double fixedPerDay() => _fixedMonthly <= 0 ? 0 : _fixedMonthly / 30;
+    double bucketFixed(DateTime start, DateTime end) =>
+        fixedPerDay() * end.difference(start).inDays;
 
     final periodRecords = _records
         .where((record) => isInRange(record.date, rangeStart, rangeEnd))
         .toList();
-    final values = List.generate(bucketStarts.length, (index) {
-      return periodRecords
-          .where(
-            (record) =>
-                isInRange(record.date, bucketStarts[index], bucketEnds[index]),
-          )
-          .fold<double>(0, (sum, record) => sum + recordValue(record));
-    });
-    final total = periodRecords.fold<double>(
-      0,
-      (sum, record) => sum + recordValue(record),
+
+    // _statisticsMetric: 0=支出，1=收入，2=净收入
+    double bucketValue(DateTime start, DateTime end) {
+      final inBucket = periodRecords.where(
+        (record) => isInRange(record.date, start, end),
+      );
+      switch (_statisticsMetric) {
+        case 1:
+          return inBucket.fold<double>(0, (sum, r) => sum + r.income);
+        case 2:
+          return inBucket.fold<double>(0, (sum, r) => sum + r.net) -
+              bucketFixed(start, end);
+        default:
+          return inBucket.fold<double>(0, (sum, r) => sum + r.totalCost) +
+              bucketFixed(start, end);
+      }
+    }
+
+    final values = List.generate(
+      bucketStarts.length,
+      (index) => bucketValue(bucketStarts[index], bucketEnds[index]),
     );
-    final energyTotal = periodRecords.fold<double>(
+    final periodFixed = bucketFixed(rangeStart, rangeEnd);
+    final incomeTotal = periodRecords.fold<double>(
       0,
-      (sum, record) => sum + record.energyCost,
+      (sum, record) => sum + record.income,
     );
-    final rentTotal = periodRecords.fold<double>(
-      0,
-      (sum, record) => sum + record.vehicleRent,
-    );
+    final expenseTotal =
+        periodRecords.fold<double>(
+          0,
+          (sum, record) => sum + record.totalCost,
+        ) +
+        periodFixed;
+    final netTotal = incomeTotal - expenseTotal;
+    final total = _statisticsMetric == 1
+        ? incomeTotal
+        : _statisticsMetric == 2
+        ? netTotal
+        : expenseTotal;
+
+    // 各支出分类汇总（含固定成本单独一行）。
+    final categoryTotals = <String, double>{};
+    for (final record in periodRecords) {
+      for (final entry in record.expenses.entries) {
+        categoryTotals[entry.key] =
+            (categoryTotals[entry.key] ?? 0) + entry.value;
+      }
+    }
+    final sortedCategories = categoryTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     return CustomScrollView(
       slivers: [
@@ -803,8 +919,8 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const Spacer(),
                         DropdownButtonHideUnderline(
-                          child: DropdownButton<bool>(
-                            value: _statisticsShowExpense,
+                          child: DropdownButton<int>(
+                            value: _statisticsMetric,
                             dropdownColor: yellow,
                             iconEnabledColor: Colors.white,
                             style: const TextStyle(
@@ -813,18 +929,22 @@ class _HomePageState extends State<HomePage> {
                             ),
                             items: [
                               DropdownMenuItem(
-                                value: true,
+                                value: 0,
                                 child: Text(tr('expense')),
                               ),
                               DropdownMenuItem(
-                                value: false,
+                                value: 1,
                                 child: Text(tr('income')),
+                              ),
+                              DropdownMenuItem(
+                                value: 2,
+                                child: Text(tr('netIncome')),
                               ),
                             ],
                             onChanged: (value) {
                               if (value != null) {
                                 setState(() {
-                                  _statisticsShowExpense = value;
+                                  _statisticsMetric = value;
                                 });
                               }
                             },
@@ -929,9 +1049,11 @@ class _HomePageState extends State<HomePage> {
                 Row(
                   children: [
                     Text(
-                      _statisticsShowExpense
+                      _statisticsMetric == 0
                           ? tr('expenseRanking')
-                          : tr('incomeSummary'),
+                          : _statisticsMetric == 1
+                          ? tr('incomeSummary')
+                          : tr('netIncomeSummary'),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -939,13 +1061,17 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const Spacer(),
                     Text(
-                      '${_statisticsShowExpense ? tr('totalExpense') : tr('totalIncome')} '
-                      '¥${total.toStringAsFixed(2)}',
+                      '${_statisticsMetric == 0
+                              ? tr('totalExpense')
+                              : _statisticsMetric == 1
+                              ? tr('totalIncome')
+                              : tr('totalNet')} '
+                      '${money(total)}',
                     ),
                   ],
                 ),
                 const SizedBox(height: 22),
-                if (periodRecords.isEmpty)
+                if (periodRecords.isEmpty && periodFixed <= 0)
                   SizedBox(
                     height: 220,
                     child: Center(
@@ -966,27 +1092,50 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   )
-                else if (_statisticsShowExpense) ...[
+                else if (_statisticsMetric == 0) ...[
+                  for (var i = 0; i < sortedCategories.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 18),
+                    _RankingRow(
+                      label: tr(
+                        ExpenseCategories.labelKey(sortedCategories[i].key),
+                      ),
+                      value: sortedCategories[i].value,
+                      total: total,
+                      color: _rankColor(i),
+                    ),
+                  ],
+                  if (periodFixed > 0) ...[
+                    if (sortedCategories.isNotEmpty)
+                      const SizedBox(height: 18),
+                    _RankingRow(
+                      label: tr('fixedCost'),
+                      value: periodFixed,
+                      total: total,
+                      color: Colors.grey,
+                    ),
+                  ],
+                ] else if (_statisticsMetric == 1)
                   _RankingRow(
-                    label: tr('energy'),
-                    value: energyTotal,
-                    total: total,
-                    color: const Color(0xFFF05C4D),
+                    label: tr('taxiIncome'),
+                    value: incomeTotal,
+                    total: incomeTotal,
+                    color: yellow,
+                  )
+                else ...[
+                  _RankingRow(
+                    label: tr('totalIncome'),
+                    value: incomeTotal,
+                    total: incomeTotal > 0 ? incomeTotal : 1,
+                    color: yellow,
                   ),
                   const SizedBox(height: 18),
                   _RankingRow(
-                    label: tr('rent'),
-                    value: rentTotal,
-                    total: total,
-                    color: yellow,
+                    label: tr('totalExpense'),
+                    value: expenseTotal,
+                    total: incomeTotal > 0 ? incomeTotal : expenseTotal,
+                    color: const Color(0xFFF05C4D),
                   ),
-                ] else
-                  _RankingRow(
-                    label: tr('taxiIncome'),
-                    value: total,
-                    total: total,
-                    color: yellow,
-                  ),
+                ],
               ],
             ),
           ),
@@ -1233,17 +1382,21 @@ class _HomePageState extends State<HomePage> {
       0,
       (sum, record) => sum + record.income,
     );
-    final monthCost = monthRecords.fold<double>(
-      0,
-      (sum, record) => sum + record.totalCost,
-    );
+    final monthCost =
+        monthRecords.fold<double>(
+          0,
+          (sum, record) => sum + record.totalCost,
+        ) +
+        _fixedMonthly;
     final monthBalance = monthIncome - monthCost;
     final groupedRecords = <String, List<TaxiRecord>>{};
     for (final record in monthRecords) {
       groupedRecords.putIfAbsent(_dateKey(record.date), () => []).add(record);
     }
 
-    return Scaffold(
+    return ValueListenableBuilder<String>(
+      valueListenable: currencySymbol,
+      builder: (context, value, _) => Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
       extendBody: true,
       body: _currentTab == 1
@@ -1301,8 +1454,15 @@ class _HomePageState extends State<HomePage> {
                                             ),
                                             IconButton(
                                               tooltip: tr('search'),
-                                              onPressed: () =>
-                                                  _showComingSoon(tr('search')),
+                                              onPressed: () {
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) => SearchPage(
+                                                      records: _records,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
                                               icon: const Icon(Icons.search),
                                             ),
                                             IconButton(
@@ -1502,7 +1662,7 @@ class _HomePageState extends State<HomePage> {
                                         Text(
                                           trf('incomeLine', {
                                             'v':
-                                                '¥${dailyIncome.toStringAsFixed(2)}',
+                                                money(dailyIncome),
                                           }),
                                           style: const TextStyle(
                                             color: Colors.grey,
@@ -1512,11 +1672,11 @@ class _HomePageState extends State<HomePage> {
                                         Text(
                                           '${trf('expenseLine', {
                                                 'v':
-                                                    '¥${dailyExpense.toStringAsFixed(2)}',
+                                                    money(dailyExpense),
                                               })}  '
                                           '${trf('netIncomeLine', {
                                                 'v':
-                                                    '¥${dailyNet.toStringAsFixed(2)}',
+                                                    money(dailyNet),
                                               })}',
                                           style: TextStyle(
                                             color: dailyNet >= 0
@@ -1585,7 +1745,7 @@ class _HomePageState extends State<HomePage> {
                                               'd': record.distance
                                                   .toStringAsFixed(1),
                                               'c':
-                                                  '¥${record.totalCost.toStringAsFixed(2)}',
+                                                  money(record.totalCost),
                                             }),
                                             style: const TextStyle(
                                               color: Colors.grey,
@@ -1684,6 +1844,7 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+      ),
     );
   }
 }
@@ -1729,13 +1890,13 @@ class _MonthlySummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '¥ ${balance.toStringAsFixed(2)}',
+              '${currencySymbol.value} ${balance.toStringAsFixed(2)}',
               style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              '${tr('monthIncome')}：¥ ${income.toStringAsFixed(2)}　　'
-              '${tr('monthExpense')}：¥ ${cost.toStringAsFixed(2)}',
+              '${tr('monthIncome')}：${currencySymbol.value} ${income.toStringAsFixed(2)}　　'
+              '${tr('monthExpense')}：${currencySymbol.value} ${cost.toStringAsFixed(2)}',
               style: const TextStyle(color: Colors.grey, fontSize: 15),
             ),
           ],
@@ -2028,7 +2189,7 @@ class _RankingRow extends StatelessWidget {
           children: [
             Expanded(child: Text(label, style: const TextStyle(fontSize: 17))),
             Text(
-              '¥${value.toStringAsFixed(2)}',
+              money(value),
               style: TextStyle(
                 color: color,
                 fontSize: 17,
@@ -2051,9 +2212,10 @@ class _RankingRow extends StatelessWidget {
 }
 
 class AddRecordPage extends StatefulWidget {
-  const AddRecordPage({super.key, this.initialRecord});
+  const AddRecordPage({super.key, this.initialRecord, this.fixedMonthly = 0});
 
   final TaxiRecord? initialRecord;
+  final double fixedMonthly;
 
   @override
   State<AddRecordPage> createState() => _AddRecordPageState();
@@ -2063,10 +2225,14 @@ class _AddRecordPageState extends State<AddRecordPage> {
   final _formKey = GlobalKey<FormState>();
   final _incomeController = TextEditingController();
   final _distanceController = TextEditingController();
-  final _energyController = TextEditingController();
-  final _vehicleRentController = TextEditingController();
   final _noteController = TextEditingController();
+  final Map<String, TextEditingController> _expenseControllers = {
+    for (final key in ExpenseCategories.keys) key: TextEditingController(),
+  };
   DateTime _date = DateTime.now();
+
+  static String _fmt(double value) =>
+      value == 0 ? '' : value.toStringAsFixed(2);
 
   @override
   void initState() {
@@ -2074,10 +2240,14 @@ class _AddRecordPageState extends State<AddRecordPage> {
     final record = widget.initialRecord;
     if (record != null) {
       _date = record.date;
-      _incomeController.text = record.income.toStringAsFixed(2);
-      _distanceController.text = record.distance.toStringAsFixed(1);
-      _energyController.text = record.energyCost.toStringAsFixed(2);
-      _vehicleRentController.text = record.vehicleRent.toStringAsFixed(2);
+      _incomeController.text = _fmt(record.income);
+      _distanceController.text = _fmt(record.distance);
+      for (final key in ExpenseCategories.keys) {
+        final value = record.expenses[key] ?? 0;
+        if (value > 0) {
+          _expenseControllers[key]!.text = value.toStringAsFixed(2);
+        }
+      }
       _noteController.text = record.note;
     }
   }
@@ -2086,9 +2256,10 @@ class _AddRecordPageState extends State<AddRecordPage> {
   void dispose() {
     _incomeController.dispose();
     _distanceController.dispose();
-    _energyController.dispose();
-    _vehicleRentController.dispose();
     _noteController.dispose();
+    for (final controller in _expenseControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -2111,14 +2282,20 @@ class _AddRecordPageState extends State<AddRecordPage> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    final expenses = <String, double>{};
+    for (final entry in _expenseControllers.entries) {
+      final value = _number(entry.value);
+      if (value > 0) {
+        expenses[entry.key] = value;
+      }
+    }
 
     Navigator.of(context).pop(
       TaxiRecord(
         date: _date,
         income: _number(_incomeController),
         distance: _number(_distanceController),
-        energyCost: _number(_energyController),
-        vehicleRent: _number(_vehicleRentController),
+        expenses: expenses,
         note: _noteController.text.trim(),
       ),
     );
@@ -2126,6 +2303,7 @@ class _AddRecordPageState extends State<AddRecordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final currency = currencySymbol.value;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -2148,21 +2326,39 @@ class _AddRecordPageState extends State<AddRecordPage> {
             ),
             _NumberField(
               controller: _incomeController,
-              label: '${tr('income')}（¥）',
-              required: true,
+              label: '${tr('income')}（$currency）',
             ),
             _NumberField(
               controller: _distanceController,
               label: '${tr('distance')}（km）',
             ),
-            _NumberField(
-              controller: _energyController,
-              label: '${tr('energy')}（¥）',
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Text(
+                tr('expenseBreakdownTitle'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-            _NumberField(
-              controller: _vehicleRentController,
-              label: '${tr('rent')}（¥）',
-            ),
+            for (final key in ExpenseCategories.keys)
+              _NumberField(
+                controller: _expenseControllers[key]!,
+                label:
+                    '${tr(ExpenseCategories.labelKey(key))}（$currency）',
+                icon: ExpenseCategories.iconFor(key),
+              ),
+            if (widget.fixedMonthly > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  trf('fixedCostHintInForm', {
+                    'v': money(widget.fixedMonthly),
+                  }),
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+              ),
             TextFormField(
               controller: _noteController,
               decoration: InputDecoration(
@@ -2184,12 +2380,12 @@ class _NumberField extends StatelessWidget {
   const _NumberField({
     required this.controller,
     required this.label,
-    this.required = false,
+    this.icon,
   });
 
   final TextEditingController controller;
   final String label;
-  final bool required;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -2201,12 +2397,10 @@ class _NumberField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
+          prefixIcon: icon == null ? null : Icon(icon),
         ),
         validator: (value) {
           final text = value?.trim() ?? '';
-          if (required && text.isEmpty) {
-            return tr('invalidIncome');
-          }
           if (text.isNotEmpty && double.tryParse(text) == null) {
             return tr('invalidNumber');
           }

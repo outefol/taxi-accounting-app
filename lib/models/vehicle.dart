@@ -101,6 +101,20 @@ class VehicleStore {
     return active;
   }
 
+  static Vehicle? findByNumber(
+    SharedPreferences preferences,
+    String number,
+  ) {
+    final normalized = number.trim().toUpperCase();
+    if (normalized.isEmpty) return null;
+    for (final vehicle in _readVehicles(preferences)) {
+      if (vehicle.number.toUpperCase() == normalized) {
+        return vehicle;
+      }
+    }
+    return null;
+  }
+
   static Vehicle? activeVehicle(SharedPreferences preferences) {
     final vehicles = _readVehicles(preferences);
     final activeId = preferences.getString(activeVehicleIdKey);

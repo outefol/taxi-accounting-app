@@ -159,18 +159,53 @@ class _LoginPageState extends State<LoginPage> {
     final accountMatches = savedAccount == null || savedAccount == account;
     if (accountMatches && password == savedPassword) {
       await preferences.setString(accountKey, account);
-      await preferences.setString(vehicleNumberKey, vehicleNumber);
       await preferences.setBool(loggedInKey, true);
+      // 车号只做查找/切换，不再自动改名当前车辆，避免误操作。
+      final existing = VehicleStore.findByNumber(preferences, vehicleNumber);
       late final Vehicle activeVehicle;
-      try {
-        activeVehicle = await VehicleStore.ensureActiveVehicle(
+      if (existing != null) {
+        activeVehicle = await VehicleStore.setActiveVehicle(
           preferences,
-          preferredNumber: vehicleNumber,
+          existing.id,
         );
-      } on ArgumentError catch (error) {
-        setState(() => _errorMessage = error.message?.toString());
-        return;
+      } else {
+        if (!mounted) return;
+        final addNew = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(tr('vehicleNotFound')),
+            content: Text(trf('vehicleNotFoundHint', {'number': vehicleNumber})),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(tr('cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(tr('addAsNewVehicle')),
+              ),
+            ],
+          ),
+        );
+        if (addNew != true) {
+          return;
+        }
+        try {
+          final created = await VehicleStore.addVehicle(
+            preferences,
+            vehicleNumber,
+          );
+          activeVehicle = await VehicleStore.setActiveVehicle(
+            preferences,
+            created.id,
+          );
+        } on ArgumentError catch (error) {
+          if (!mounted) return;
+          setState(() => _errorMessage = error.message?.toString());
+          return;
+        }
       }
+      await preferences.setString(vehicleNumberKey, activeVehicle.number);
       if (!mounted) {
         return;
       }
